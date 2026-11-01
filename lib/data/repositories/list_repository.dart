@@ -67,10 +67,12 @@ class ListRepository {
   }
 
   /// A new product goes before the first or after the last one; positions may go negative.
+  /// [userId] is who plans the product; it matters when [planned] is true.
   Future<Result<Product>> addProduct(
     String name, {
     required bool planned,
     bool atStart = false,
+    String? userId,
   }) => _service.getProducts(groupId).andThen((products) async {
     final position = atStart
         ? products.fold(0, (m, p) => p.position < m ? p.position : m) - 1
@@ -81,12 +83,62 @@ class ListRepository {
       name: name,
       position: position,
       planned: planned,
+      plannedBy: planned ? userId : null,
+      plannedAt: planned ? DateTime.now() : null,
     );
     return (await _service.putProduct(product)).map((_) => product);
   });
 
-  Future<Result<void>> setPlanned(Product product, bool planned) =>
-      _service.putProduct(product.copyWith(planned: planned));
+  /// Makes [names] needed, the first name on top. A catalog name just becomes needed, a
+  /// name that is already needed changes nothing, an unknown one is created; names are
+  /// compared without case. Returns how many products changed.
+  Future<Result<int>> addProducts(List<String> names, String userId) async {
+    final first = <String, String>{};
+    for (final raw in names) {
+      final name = raw.trim();
+      if (name.isNotEmpty) first.putIfAbsent(name.toLowerCase(), () => name);
+    }
+    final products = await _service.getProducts(groupId);
+    if (products case Failure(:final error)) return Failure(error);
+    final byName = {
+      for (final p in (products as Ok<List<Product>>).value)
+        p.name.toLowerCase(): p,
+    };
+    var changed = 0;
+    // Each new product goes before all others, so the last name is added first.
+    for (final entry in first.entries.toList().reversed) {
+      final existing = byName[entry.key];
+      final Result<void> saved;
+      if (existing == null) {
+        saved = await addProduct(
+          entry.value,
+          planned: true,
+          atStart: true,
+          userId: userId,
+        );
+      } else if (existing.planned) {
+        continue;
+      } else {
+        saved = await setPlanned(existing, true, userId);
+      }
+      if (saved case Failure(:final error)) return Failure(error);
+      changed++;
+    }
+    return Ok(changed);
+  }
+
+  /// Planning records [userId] and the time; un-planning clears them.
+  Future<Result<void>> setPlanned(
+    Product product,
+    bool planned,
+    String userId,
+  ) => _service.putProduct(
+    product.copyWith(
+      planned: planned,
+      plannedBy: userId,
+      plannedAt: DateTime.now(),
+    ),
+  );
 
   /// Pinned plans (templates) first, then the newest.
   Future<Result<List<Plan>>> getPlans() => _service
@@ -99,13 +151,16 @@ class ListRepository {
           }),
       );
 
-  Future<Result<void>> applyPlan(Plan plan) =>
+  Future<Result<void>> applyPlan(Plan plan, String userId) =>
       _service.getProducts(groupId).andThen((products) async {
         final byId = {for (final p in products) p.id: p};
+        final now = DateTime.now();
         for (final id in plan.productIds) {
           final p = byId[id];
           if (p == null || p.planned) continue;
-          final saved = await _service.putProduct(p.copyWith(planned: true));
+          final saved = await _service.putProduct(
+            p.copyWith(planned: true, plannedBy: userId, plannedAt: now),
+          );
           if (saved case Failure(:final error)) return Failure(error);
         }
         return const Ok<void>(null);
@@ -214,6 +269,41 @@ class ListRepository {
         }
         return const Ok<void>(null);
       });
+
+  /// When [userId] last asked for products in this group; null if never.
+  Future<Result<DateTime?>> getAskedAt(String userId) =>
+      _service.getAskedAt(groupId, userId);
+
+  /// "Ask": tells every other member that [userId] needs [productIds], in one notice
+  /// each, and remembers the time so these products are not asked for again. Returns
+  /// how many products were announced; with nobody to tell, nothing is recorded.
+  Future<Result<int>> ask(String userId, List<String> productIds) async {
+    if (productIds.isEmpty) return const Ok(0);
+    final members = switch (await _groups.getGroup(groupId)) {
+      Ok(:final value) => value.memberIds,
+      Failure() => const <String>[],
+    };
+    final others = members.where((u) => u != userId).toList();
+    if (others.isEmpty) return const Ok(0);
+    final now = DateTime.now();
+    for (final other in others) {
+      final told = await _service.putNotice(
+        Notice(
+          id: newId(),
+          groupId: groupId,
+          toUserId: other,
+          fromUserId: userId,
+          productIds: productIds,
+          sentAt: now,
+          kind: NoticeKind.needed,
+        ),
+      );
+      if (told case Failure(:final error)) return Failure(error);
+    }
+    final saved = await _service.putAskedAt(groupId, userId, now);
+    if (saved case Failure(:final error)) return Failure(error);
+    return Ok(productIds.length);
+  }
 
   /// Adds or removes the user's mark in the user's open trip; the first mark opens a trip.
   Future<Result<void>> toggleMark(String productId, String userId) =>

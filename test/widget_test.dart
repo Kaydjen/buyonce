@@ -1,3 +1,4 @@
+import 'package:buyonce/core/theme/app_tokens.dart';
 import 'package:buyonce/core/utils/result.dart';
 import 'package:buyonce/main.dart';
 import 'package:buyonce/presentation/view_models/groups/groups_view_model.dart';
@@ -8,15 +9,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-Future<void> pumpApp(WidgetTester tester) async {
+/// The app opens on Shop; most tests are about Plan, so they go there ([plan]).
+Future<void> pumpApp(WidgetTester tester, {bool plan = true}) async {
   await tester.pumpWidget(const ProviderScope(child: BuyOnceApp()));
   await tester.pumpAndSettle();
+  if (plan) {
+    await tester.tap(find.byKey(const Key('tabPlan')));
+    await tester.pumpAndSettle();
+  }
 }
 
 double sendOpacity(WidgetTester tester) => tester
     .widget<AnimatedOpacity>(
       find.ancestor(
-        of: find.byType(FilledButton),
+        of: find.byKey(const Key('sendButton')),
         matching: find.byType(AnimatedOpacity),
       ),
     )
@@ -157,6 +163,28 @@ Finder markIn(String name, IconData icon) {
   );
 }
 
+/// A product inside the Shop card "To buy" / "Frequent".
+Finder inToBuy(String name) => find.descendant(
+  of: find.byKey(const Key('toBuyCard')),
+  matching: find.text(name),
+);
+
+Finder inFrequent(String name) => find.descendant(
+  of: find.byKey(const Key('frequentRows')),
+  matching: find.text(name),
+);
+
+Future<void> openFind(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('findButton')));
+  await tester.pumpAndSettle();
+}
+
+/// The "needed" mark of a Plan row (bar or dot).
+Finder needIn(String name) => find.descendant(
+  of: find.ancestor(of: rowNamed(name), matching: find.byType(ProductRow)),
+  matching: find.byKey(const Key('needMark')),
+);
+
 /// Opens the group sheet from the header and picks [name].
 Future<void> switchGroup(WidgetTester tester, String name) async {
   await tester.tap(find.byKey(const Key('groupButton')));
@@ -172,83 +200,289 @@ void main() {
     await pumpApp(tester);
     expect(modeTitle(tester), 'Plan');
     expect(find.byKey(const Key('addField')), findsOneWidget);
-    expect(find.text('LIST'), findsOneWidget);
+    expect(find.text('Search'), findsOneWidget);
+    expect(find.text('LIST'), findsNothing);
+    expect(find.text('4 to buy'), findsOneWidget);
     expect(rowNamed('Cheese'), findsOneWidget);
+    expect(needIn('Milk'), findsOneWidget);
+    expect(needIn('Cheese'), findsNothing);
     expect(sendOpacity(tester), 0);
   });
 
-  testWidgets('Shop shows only needed products, no field, no label', (
+  testWidgets('Plan: a tap marks the row in place and moves the counter', (
     tester,
   ) async {
     await pumpApp(tester);
-    await goShop(tester);
-    expect(modeTitle(tester), 'Shop');
-    expect(rowNamed('Milk'), findsOneWidget);
-    expect(rowNamed('Cheese'), findsNothing);
-    expect(find.byKey(const Key('addField')), findsNothing);
-    expect(find.text('LIST'), findsNothing);
-    expect(find.byIcon(Icons.search), findsOneWidget);
+    double top(String name) => tester.getTopLeft(rowNamed(name)).dy;
+    final before = [top('Bread'), top('Cheese'), top('Milk')];
+    await tester.tap(rowNamed('Cheese'));
+    await tester.pumpAndSettle();
+    expect(needIn('Cheese'), findsOneWidget);
+    expect(find.text('5 to buy'), findsOneWidget);
+    expect([top('Bread'), top('Cheese'), top('Milk')], before);
+
+    await tester.tap(rowNamed('Milk'));
+    await tester.pumpAndSettle();
+    expect(needIn('Milk'), findsNothing);
+    expect(find.text('4 to buy'), findsOneWidget);
+    expect([top('Bread'), top('Cheese'), top('Milk')], before);
   });
 
-  testWidgets('Shop search offers frequent products; a tap takes one', (
+  testWidgets('Plan: the counter hides at zero, taken products do not count', (
     tester,
   ) async {
     await pumpApp(tester);
     await goShop(tester);
-    await tester.tap(find.byIcon(Icons.search));
+    await tester.tap(find.byKey(const Key('markAll')));
     await tester.pumpAndSettle();
-    // Before typing: frequent products outside the plan, not the planned ones.
-    expect(rowNamed('Bread'), findsOneWidget);
-    expect(rowNamed('Milk'), findsNothing);
-    expect(rowNamed('Water'), findsNothing); // never bought: not offered
+    await goPlan(tester);
+    expect(find.byKey(const Key('toBuyCount')), findsNothing);
+    // A taken row shows its check, not the needed mark.
+    expect(needIn('Milk'), findsNothing);
+    expect(markIn('Milk', Icons.check), findsOneWidget);
+  });
+
+  testWidgets('the needed mark is a 4 dp bar that does not shift the name', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    expect(tester.getSize(needIn('Milk')).width, 4);
+    expect(
+      tester.getTopLeft(rowNamed('Milk')).dx,
+      tester.getTopLeft(rowNamed('Bread')).dx,
+    );
+  });
+
+  testWidgets('the app opens on Shop with the cards To buy and Frequent', (
+    tester,
+  ) async {
+    await pumpApp(tester, plan: false);
+    expect(modeTitle(tester), 'Shop');
+    expect(find.text('To buy'), findsOneWidget);
+    expect(find.text('Frequent'), findsOneWidget);
+    expect(inToBuy('Milk'), findsOneWidget);
+    expect(inToBuy('Bread'), findsNothing);
+    expect(inFrequent('Bread'), findsOneWidget);
+    expect(inFrequent('Milk'), findsNothing);
+    expect(rowNamed('Cheese'), findsOneWidget); // frequent too
+    expect(find.byKey(const Key('addField')), findsNothing);
+    // The only search icon is in the Frequent title, none in the header.
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('frequentCard')),
+        matching: find.byIcon(Icons.search),
+      ),
+      findsOneWidget,
+    );
+    expect(find.byIcon(Icons.search), findsOneWidget);
+    // The card titles are centred.
+    final screen = tester.getCenter(find.byType(Scaffold)).dx;
+    expect(tester.getCenter(find.text('To buy')).dx, closeTo(screen, 1));
+    expect(tester.getCenter(find.text('Frequent')).dx, closeTo(screen, 1));
+  });
+
+  testWidgets('Frequent: 8 unplanned products, frequent first, topped up', (
+    tester,
+  ) async {
+    await pumpApp(tester, plan: false);
+    double top(String name) => tester.getTopLeft(inFrequent(name)).dy;
+    // Seed history: Bread 5, Eggs 5, Kefir 3, Cheese 2, Bananas 2, ...
+    expect(top('Bread') < top('Kefir'), isTrue);
+    expect(top('Kefir') < top('Cheese'), isTrue);
+    expect(top('Cheese') < top('Bananas'), isTrue);
+    expect(inFrequent('Butter'), findsOneWidget); // topped up from the catalog
+    expect(inFrequent('Onions'), findsNothing);
+    expect(inFrequent('Water'), findsNothing);
+  });
+
+  testWidgets('Shop: a tap marks a row in place, no accent on the check', (
+    tester,
+  ) async {
+    await pumpApp(tester, plan: false);
+    double top(String name) => tester.getTopLeft(find.text(name)).dy;
+    final before = [top('Milk'), top('Bread'), top('Eggs'), top('Kefir')];
     await tester.tap(find.text('Bread'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Milk'));
+    await tester.pumpAndSettle();
+    expect([top('Milk'), top('Bread'), top('Eggs'), top('Kefir')], before);
     expect(sendOpacity(tester), 1);
+    final check = tester.widget<Icon>(markIn('Bread', Icons.check));
+    final tokens = Theme.of(tester.element(find.byType(Scaffold)))
+        .extension<AppTokens>()!;
+    expect(check.color, tokens.text);
+    expect(check.color, isNot(tokens.accent));
+  });
 
-    // Typing reaches the whole catalog, taken rows keep their check in place.
+  testWidgets(
+    'Shop: Mark all sits in the To buy title; the card hides when empty',
+    (tester) async {
+      await pumpApp(tester, plan: false);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('toBuyCard')),
+          matching: find.byKey(const Key('markAll')),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const Key('markAll')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('markAll')), findsNothing);
+      expect(find.byKey(const Key('toBuyCard')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('sendButton')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('toBuyCard')), findsNothing);
+      expect(find.text('To buy'), findsNothing);
+      expect(find.text('Frequent'), findsOneWidget);
+    },
+  );
+
+  testWidgets('Frequent keeps its order while on Shop, ranks again on return', (
+    tester,
+  ) async {
+    await pumpApp(tester, plan: false);
+    double top(String name) => tester.getTopLeft(inFrequent(name)).dy;
+    final names = ['Bread', 'Eggs', 'Kefir', 'Cheese', 'Butter'];
+    // The To buy card goes after Send and the card moves up: compare the gaps.
+    List<double> gaps() => [for (final n in names) top(n) - top('Bread')];
+    final before = gaps();
+    await tester.tap(find.byKey(const Key('markAll')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('sendButton')));
+    await tester.pumpAndSettle();
+    // Milk, now unplanned and the most often sent, does not jump in.
+    expect(inFrequent('Milk'), findsNothing);
+    expect(gaps(), before);
+
+    await goPlan(tester);
+    await goShop(tester);
+    expect(inFrequent('Milk'), findsOneWidget);
+    expect(top('Milk') < top('Bread'), isTrue);
+  });
+
+  testWidgets('a long pause away ranks Frequent again', (tester) async {
+    await pumpApp(tester, plan: false);
+    await tester.tap(find.byKey(const Key('markAll')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('sendButton')));
+    await tester.pumpAndSettle();
+    expect(inFrequent('Milk'), findsNothing);
+    ProviderScope.containerOf(tester.element(find.byType(Scaffold)))
+        .read(listViewModelProvider.notifier)
+        .startNewVisit(DateTime.now());
+    await tester.pumpAndSettle();
+    expect(inFrequent('Milk'), findsOneWidget);
+  });
+
+  testWidgets(
+    'Shop search: the field replaces the Frequent title, close returns',
+    (tester) async {
+      await pumpApp(tester, plan: false);
+      await openFind(tester);
+      expect(find.text('Frequent'), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('frequentCard')),
+          matching: find.byKey(const Key('addField')),
+        ),
+        findsOneWidget,
+      );
+      // Before typing the card still lists the frequent products.
+      expect(inFrequent('Bread'), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('addField')), findsNothing);
+      expect(find.text('Frequent'), findsOneWidget);
+    },
+  );
+
+  testWidgets('Shop search: the Frequent title scrolls to the top', (
+    tester,
+  ) async {
+    await pumpApp(tester, plan: false);
+    final before = tester.getTopLeft(find.byKey(const Key('frequentCard'))).dy;
+    await openFind(tester);
+    final after = tester.getTopLeft(find.byKey(const Key('frequentCard'))).dy;
+    expect(after, lessThan(before));
+    expect(after, lessThan(80));
+  });
+
+  testWidgets('Shop search reaches the catalog; a tap takes one in place', (
+    tester,
+  ) async {
+    await pumpApp(tester, plan: false);
+    await openFind(tester);
     await typeInField(tester, 'Water');
-    expect(rowNamed('Water'), findsOneWidget);
+    expect(inFrequent('Water'), findsOneWidget);
+    expect(inFrequent('Bread'), findsNothing);
+    await tester.tap(rowNamed('Water'));
+    await tester.pumpAndSettle();
+    expect(sendOpacity(tester), 1);
+    expect(markIn('Water', Icons.check), findsOneWidget);
     await tester.tap(find.byIcon(Icons.close));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('addField')), findsNothing);
-    expect(markIn('Bread', Icons.check), findsOneWidget);
+    // Not among the frequent ones, so it sits on top of the card, taken.
+    double top(String name) => tester.getTopLeft(inFrequent(name)).dy;
+    expect(top('Water') < top('Bread'), isTrue);
+    expect(markIn('Water', Icons.check), findsOneWidget);
 
-    // The taken product leaves with Send and stays in the catalog.
+    // The taken product leaves the top with Send and stays in the catalog.
     await tester.tap(find.byKey(const Key('sendButton')));
     await tester.pumpAndSettle();
-    expect(rowNamed('Bread'), findsNothing);
     await goPlan(tester);
-    expect(rowNamed('Bread'), findsOneWidget);
+    expect(rowNamed('Water'), findsOneWidget);
   });
 
   testWidgets('Shop search: Enter on a unique name takes it and closes', (
     tester,
   ) async {
-    await pumpApp(tester);
-    await goShop(tester);
-    await tester.tap(find.byIcon(Icons.search));
-    await tester.pumpAndSettle();
+    await pumpApp(tester, plan: false);
+    await openFind(tester);
     await typeAndSubmit(tester, 'Water');
     expect(find.byKey(const Key('addField')), findsNothing);
     expect(markIn('Water', Icons.check), findsOneWidget);
     expect(sendOpacity(tester), 1);
   });
 
+  testWidgets(
+    'Shop search: a planned name is taken in To buy, not duplicated',
+    (tester) async {
+      await pumpApp(tester, plan: false);
+      await openFind(tester);
+      await typeAndSubmit(tester, 'Salad');
+      expect(find.byKey(const Key('addField')), findsNothing);
+      expect(find.text('Salad'), findsOneWidget);
+      expect(inToBuy('Salad'), findsOneWidget);
+      expect(markIn('Salad', Icons.check), findsOneWidget);
+    },
+  );
+
   testWidgets('Shop search: an unknown name is created taken, not planned', (
     tester,
   ) async {
-    await pumpApp(tester);
-    await goShop(tester);
-    await tester.tap(find.byIcon(Icons.search));
-    await tester.pumpAndSettle();
+    await pumpApp(tester, plan: false);
+    await openFind(tester);
     await typeAndSubmit(tester, 'Nuts');
     expect(markIn('Nuts', Icons.check), findsOneWidget);
+    expect(inFrequent('Nuts'), findsOneWidget);
     expect(sendOpacity(tester), 1);
     await tester.tap(find.byKey(const Key('sendButton')));
     await tester.pumpAndSettle();
-    expect(rowNamed('Nuts'), findsNothing);
     await goPlan(tester);
     expect(rowNamed('Nuts'), findsOneWidget);
+    expect(needIn('Nuts'), findsNothing);
+  });
+
+  testWidgets('a partner mark on an unplanned product shows at the top', (
+    tester,
+  ) async {
+    await pumpApp(tester, plan: false);
+    // seed22 = Tea: never bought, not among the frequent ones.
+    await partnerMarks(tester, ['seed22']);
+    double top(String name) => tester.getTopLeft(inFrequent(name)).dy;
+    expect(top('Tea') < top('Bread'), isTrue);
+    expect(markIn('Tea', Icons.circle), findsOneWidget);
   });
 
   testWidgets('groups: each one shows its own list', (tester) async {
@@ -335,20 +569,24 @@ void main() {
     expect(sendOpacity(tester), 0);
   });
 
-  testWidgets('sent planned product leaves the plan', (tester) async {
+  testWidgets('sent planned product leaves the plan, not its place', (
+    tester,
+  ) async {
     await pumpApp(tester);
     double top(String name) => tester.getTopLeft(find.text(name)).dy;
-    expect(top('Milk') < top('Buns'), isTrue);
+    final before = top('Milk');
+    expect(needIn('Milk'), findsOneWidget);
 
     await goShop(tester);
     await tester.tap(find.text('Milk'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('sendButton')));
     await tester.pumpAndSettle();
-    expect(rowNamed('Milk'), findsNothing);
+    expect(inToBuy('Milk'), findsNothing);
 
     await goPlan(tester);
-    expect(top('Milk') > top('Buns'), isTrue);
+    expect(needIn('Milk'), findsNothing);
+    expect(top('Milk'), before);
   });
 
   testWidgets('sort by alphabet reorders the list once', (tester) async {
@@ -378,16 +616,22 @@ void main() {
     expect(top('Eggs') < top('Bread'), isTrue);
   });
 
-  testWidgets('quick add applies a past plan', (tester) async {
+  testWidgets('quick add applies a past plan and says how many', (
+    tester,
+  ) async {
     await pumpApp(tester);
     double top(String name) => tester.getTopLeft(find.text(name)).dy;
-    expect(top('Bread') > top('Salad'), isTrue);
+    final before = top('Bread');
+    expect(needIn('Bread'), findsNothing);
 
     await openMenu(tester, 'Templates');
     expect(find.text('TEMPLATES'), findsOneWidget);
     await tester.tap(find.text('Bread, Eggs, Cheese'));
     await tester.pumpAndSettle();
-    expect(top('Bread') < top('Salad'), isTrue);
+    expect(needIn('Bread'), findsOneWidget);
+    expect(top('Bread'), before);
+    expect(find.text('Added: 3'), findsOneWidget);
+    expect(find.text('7 to buy'), findsOneWidget);
   });
 
   testWidgets('Enter on an unknown name adds it planned, on top of the list', (
@@ -482,7 +726,7 @@ void main() {
     await tester.tap(find.byKey(const Key('sendButton')));
     await tester.pumpAndSettle();
     expect(sendOpacity(tester), 0);
-    expect(rowNamed('Buns'), findsNothing); // sent: no longer needed
+    expect(inToBuy('Buns'), findsNothing); // sent: no longer needed
     expect(markIn('Salad', Icons.circle), findsOneWidget);
 
     // A mark after Notify opens a new trip and shows the button again.
@@ -579,6 +823,7 @@ void main() {
     // A marked product is locked in Plan: a tap neither unplans nor replans it.
     await tester.tap(find.text('Buns'));
     await tester.pumpAndSettle();
+    expect(find.text('You already bought this'), findsOneWidget);
     expect(markIn('Buns', Icons.check), findsOneWidget);
     expect(top('Buns'), before);
     await tester.tap(find.text('Milk'));
@@ -625,7 +870,7 @@ void main() {
       await switchTo('Anna');
       await tester.tap(find.byKey(const Key('sendButton')));
       await tester.pumpAndSettle();
-      expect(rowNamed('Salad'), findsNothing); // sent: no longer needed
+      expect(inToBuy('Salad'), findsNothing); // sent: no longer needed
 
       await switchTo('Alex');
       expect(find.text('Anna bought: Salad, Buns'), findsOneWidget);
@@ -639,46 +884,33 @@ void main() {
     },
   );
 
-  testWidgets(
-    'Plan: a tapped search result gets a check in place, no regrouping',
-    (tester) async {
-      await pumpApp(tester);
-      await typeInField(tester, 'er');
-      expect(find.text('LIST'), findsNothing);
-      double top(String name) => tester.getTopLeft(rowNamed(name)).dy;
-      final before = [top('Butter'), top('Water')];
-      expect(before[0] < before[1], isTrue);
-      await tester.tap(rowNamed('Water'));
-      await tester.pumpAndSettle();
-      expect([top('Butter'), top('Water')], before);
-      expect(find.text('LIST'), findsNothing);
-      expect(
-        find.descendant(
-          of: find.ancestor(
-            of: rowNamed('Water'),
-            matching: find.byType(ProductRow),
-          ),
-          matching: find.byIcon(Icons.check),
-        ),
-        findsOneWidget,
-      );
-    },
-  );
+  testWidgets('Plan: a tapped search result gets the needed mark in place', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    await typeInField(tester, 'er');
+    expect(find.text('LIST'), findsNothing);
+    double top(String name) => tester.getTopLeft(rowNamed(name)).dy;
+    final before = [top('Butter'), top('Water')];
+    expect(before[0] < before[1], isTrue);
+    await tester.tap(rowNamed('Water'));
+    await tester.pumpAndSettle();
+    expect([top('Butter'), top('Water')], before);
+    expect(needIn('Water'), findsOneWidget);
+  });
 
-  testWidgets(
-    'Plan: closing the search regroups and blinks the activated row',
-    (tester) async {
-      await pumpApp(tester);
-      await typeInField(tester, 'Water');
-      await tester.tap(rowNamed('Water'));
-      await tester.pumpAndSettle();
-      expect(flashAlpha(tester), 0);
-      await tester.tap(find.byIcon(Icons.close));
-      final timeline = await recordFlash(tester);
-      expect(find.text('LIST', skipOffstage: false), findsOneWidget);
-      expectBlinkAfterScroll(timeline);
-    },
-  );
+  testWidgets('Plan: closing the search blinks the activated row', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    await typeInField(tester, 'Water');
+    await tester.tap(rowNamed('Water'));
+    await tester.pumpAndSettle();
+    expect(flashAlpha(tester), 0);
+    await tester.tap(find.byIcon(Icons.close));
+    final timeline = await recordFlash(tester);
+    expectBlinkAfterScroll(timeline);
+  });
 
   testWidgets('Plan: the blink of a new product starts after the scroll', (
     tester,

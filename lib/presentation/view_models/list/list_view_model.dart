@@ -69,10 +69,11 @@ class ListViewModel extends AsyncNotifier<ListState> {
     });
     final loaded = await _load(
       ref.watch(listRepositoryProvider),
-      ListState(mode: ref.read(lastModeProvider) ?? ListMode.need),
+      ListState(mode: ref.read(lastModeProvider) ?? ListMode.buy),
     );
     // Unsent marks mean a shopping trip is going on: open in Shop.
-    return loaded.hasUnsent ? loaded.copyWith(mode: ListMode.buy) : loaded;
+    return (loaded.hasUnsent ? loaded.copyWith(mode: ListMode.buy) : loaded)
+        .copyWith(rankFrequent: true);
   }
 
   String get _groupId => ref.read(activeGroupIdProvider)!;
@@ -143,6 +144,9 @@ class ListViewModel extends AsyncNotifier<ListState> {
       autoSendAt: ref.read(idleDeadlinesProvider)[_idleKey(userId)],
       flashId: flashId,
       pendingFlashId: pendingFlashId ?? base.pendingFlashId,
+      frequentIds: base.frequentIds,
+      newSince: ref.read(visitTrackerProvider).enter(_groupId, userId),
+      askedAt: _unwrap(await repo.getAskedAt(userId)),
     );
   }
 
@@ -171,9 +175,27 @@ class ListViewModel extends AsyncNotifier<ListState> {
   /// The Shop search closes with the switch.
   void setMode(ListMode mode) {
     ref.read(lastModeProvider.notifier).select(mode);
+    final current = state.requireValue;
     state = AsyncData(
-      state.requireValue.copyWith(mode: mode, query: '', finding: false),
+      current.copyWith(
+        mode: mode,
+        query: '',
+        finding: false,
+        // Coming to Shop ranks the Frequent card again; staying keeps it.
+        rankFrequent: mode == ListMode.buy && current.mode != ListMode.buy,
+      ),
     );
+  }
+
+  /// The app came back after a long pause (it left sight at [leftAt]): the session ends,
+  /// so "New" is counted from this new start, and the Frequent card is ranked again.
+  Future<void> startNewVisit(DateTime leftAt) async {
+    ref.read(visitTrackerProvider).end(ref.read(currentUserIdProvider), leftAt);
+    if (!state.hasValue) return;
+    await refresh();
+    final current = state.value;
+    if (current == null) return;
+    state = AsyncData(current.copyWith(rankFrequent: true));
   }
 
   /// Opens or closes the Shop search; closing shows the product activated meanwhile.
@@ -228,7 +250,7 @@ class ListViewModel extends AsyncNotifier<ListState> {
     await _apply(
       (repo) => switch (current.mode) {
         ListMode.buy => repo.toggleMark(product.id, userId),
-        ListMode.need => repo.setPlanned(product, !product.planned),
+        ListMode.need => repo.setPlanned(product, !product.planned, userId),
       },
       flashId: flash ? () => product.id : null,
       pendingFlashId: !flash && becomesActive && current.flatList
@@ -238,11 +260,12 @@ class ListViewModel extends AsyncNotifier<ListState> {
     if (current.mode == ListMode.buy) _restartIdleTimer(userId);
   }
 
-  /// Shop: takes every needed product nobody has taken yet; the partner's marks stay.
+  /// Shop: takes the needed products of one card that nobody has taken yet; the
+  /// partner's marks stay.
   /// Returns the ids it marked, so the action can be undone.
-  Future<List<String>> markAll() async {
+  Future<List<String>> markAll(List<Product> card) async {
     final userId = ref.read(currentUserIdProvider);
-    final ids = [for (final p in state.requireValue.untaken) p.id];
+    final ids = [for (final p in state.requireValue.untakenOf(card)) p.id];
     if (ids.isEmpty) return ids;
     await _apply((repo) => repo.setMarks(ids, userId, marked: true));
     _restartIdleTimer(userId);
@@ -255,26 +278,35 @@ class ListViewModel extends AsyncNotifier<ListState> {
     _restartIdleTimer(userId);
   }
 
-  /// Moves a product inside its group (planned or rest); other slots keep their place.
+  /// Moves a product inside [group], the rows of one list as shown (the whole Plan list
+  /// or the To buy card, without the "New" group); other slots keep their place.
   Future<void> reorder({
-    required bool planned,
+    required List<Product> group,
     required int oldIndex,
     required int newIndex,
   }) {
     final s = state.requireValue;
     if (!s.canReorder) return Future.value();
-    final group = s.products.where((p) => p.planned == planned).toList();
-    final moved = group.removeAt(oldIndex);
-    group.insert(newIndex, moved);
+    final inGroup = {for (final p in group) p.id};
+    final moved = [...group];
+    moved.insert(newIndex, moved.removeAt(oldIndex));
     var next = 0;
     final ids = [
       for (final p in s.products)
-        p.planned == planned ? group[next++].id : p.id,
+        inGroup.contains(p.id) ? moved[next++].id : p.id,
     ];
     return _apply((repo) => repo.reorder(ids));
   }
 
-  Future<void> applyPlan(Plan plan) => _apply((repo) => repo.applyPlan(plan));
+  /// Returns how many products became needed (those already needed do not count).
+  Future<int> applyPlan(Plan plan) async {
+    final userId = ref.read(currentUserIdProvider);
+    final added = state.requireValue.products
+        .where((p) => plan.productIds.contains(p.id) && !p.planned)
+        .length;
+    await _apply((repo) => repo.applyPlan(plan, userId));
+    return added;
+  }
 
   Future<void> togglePinned(Plan plan) =>
       _apply((repo) => repo.setPinned(plan, !plan.pinned));
@@ -290,6 +322,7 @@ class ListViewModel extends AsyncNotifier<ListState> {
   /// Bought). Search never creates products. Returns false when there was no single match.
   Future<bool> activateQuery() async {
     final current = state.requireValue;
+    if (!current.searching) return false;
     final target =
         current.exactMatch ??
         (current.visible.length == 1 ? current.visible.single : null);
@@ -331,7 +364,12 @@ class ListViewModel extends AsyncNotifier<ListState> {
     }
     String? addedId;
     await _apply((repo) async {
-      final added = await repo.addProduct(name, planned: !shop, atStart: true);
+      final added = await repo.addProduct(
+        name,
+        planned: !shop,
+        atStart: true,
+        userId: userId,
+      );
       if (added case Ok(:final value)) addedId = value.id;
       return switch (added) {
         Ok(:final value) when shop => await repo.toggleMark(value.id, userId),
@@ -342,8 +380,39 @@ class ListViewModel extends AsyncNotifier<ListState> {
     if (shop) _restartIdleTimer(userId);
   }
 
+  /// "Add products": makes the names needed, see [ListRepository.addProducts]. Returns
+  /// how many products changed.
+  Future<int> addProducts(List<String> names) async {
+    var changed = 0;
+    final userId = ref.read(currentUserIdProvider);
+    await _apply((repo) async {
+      final result = await repo.addProducts(names, userId);
+      if (result case Ok(:final value)) changed = value;
+      return result;
+    });
+    return changed;
+  }
+
+  /// Plan "Ask": tells the group about my products nobody has taken. Returns how many
+  /// were announced.
+  Future<int> ask() async {
+    var count = 0;
+    final userId = ref.read(currentUserIdProvider);
+    final ids = [for (final p in state.requireValue.askProducts) p.id];
+    await _apply((repo) async {
+      final result = await repo.ask(userId, ids);
+      if (result case Ok(:final value)) count = value;
+      return result;
+    });
+    return count;
+  }
+
   /// Debug menu: acts as another user of the group on the same phone.
   Future<void> selectUser(String userId) {
+    // Leaving a user ends their session, so coming back counts what the other added.
+    ref
+        .read(visitTrackerProvider)
+        .end(ref.read(currentUserIdProvider), DateTime.now());
     ref.read(currentUserIdProvider.notifier).select(userId);
     return refresh();
   }

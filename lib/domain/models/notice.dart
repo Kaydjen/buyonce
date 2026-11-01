@@ -1,4 +1,7 @@
-/// What the other user receives when someone presses Notify; a stand-in for a push.
+/// What a notice reports: purchases made (Send) or products someone asks for (Ask).
+enum NoticeKind { bought, needed }
+
+/// What the other user receives when someone presses Send or Ask; a stand-in for a push.
 class Notice {
   const Notice({
     required this.id,
@@ -7,6 +10,7 @@ class Notice {
     required this.fromUserId,
     required this.productIds,
     required this.sentAt,
+    this.kind = NoticeKind.bought,
     this.seen = false,
   });
 
@@ -16,6 +20,7 @@ class Notice {
   final String fromUserId;
   final List<String> productIds;
   final DateTime sentAt;
+  final NoticeKind kind;
   final bool seen;
 
   Notice copyWith({bool? seen}) => Notice(
@@ -25,6 +30,7 @@ class Notice {
     fromUserId: fromUserId,
     productIds: productIds,
     sentAt: sentAt,
+    kind: kind,
     seen: seen ?? this.seen,
   );
 }

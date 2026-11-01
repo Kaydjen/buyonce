@@ -15,6 +15,7 @@ class AppTokens extends ThemeExtension<AppTokens> {
     required this.muted,
     required this.accent,
     required this.onAccent,
+    required this.needMark,
     this.radiusChip = 16,
     this.radiusField = 12,
     this.gutter = 16,
@@ -30,9 +31,12 @@ class AppTokens extends ThemeExtension<AppTokens> {
   /// Secondary text; at least 4.5:1 on [tint], so taken rows stay readable.
   final Color muted;
 
-  /// The single accent: the "taken" check and the Send button.
+  /// The single accent: the Send button (checks carry no accent).
   final Color accent;
   final Color onAccent;
+
+  /// The mark of a needed product in Plan; stage 2 decides between text and accent.
+  final Color needMark;
 
   final double radiusChip;
   final double radiusField;
@@ -51,6 +55,7 @@ class AppTokens extends ThemeExtension<AppTokens> {
     Color? muted,
     Color? accent,
     Color? onAccent,
+    Color? needMark,
     double? radiusChip,
     double? radiusField,
     double? gutter,
@@ -64,6 +69,7 @@ class AppTokens extends ThemeExtension<AppTokens> {
     muted: muted ?? this.muted,
     accent: accent ?? this.accent,
     onAccent: onAccent ?? this.onAccent,
+    needMark: needMark ?? this.needMark,
     radiusChip: radiusChip ?? this.radiusChip,
     radiusField: radiusField ?? this.radiusField,
     gutter: gutter ?? this.gutter,
@@ -82,6 +88,7 @@ class AppTokens extends ThemeExtension<AppTokens> {
       muted: Color.lerp(muted, other.muted, t)!,
       accent: Color.lerp(accent, other.accent, t)!,
       onAccent: Color.lerp(onAccent, other.onAccent, t)!,
+      needMark: Color.lerp(needMark, other.needMark, t)!,
       radiusChip: radiusChip,
       radiusField: radiusField,
       gutter: gutter,

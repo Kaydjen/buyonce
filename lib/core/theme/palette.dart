@@ -16,6 +16,7 @@ abstract final class Palette {
     muted: Color(0xFF9599A0),
     accent: Color(0xFFE8A33D),
     onAccent: Color(0xFF111214),
+    needMark: Color(0xFFE8E9EB),
   );
 
   /// Provisional until the design of stage 2.
@@ -30,5 +31,6 @@ abstract final class Palette {
     muted: Color(0xFF5E636B),
     accent: Color(0xFFA86500),
     onAccent: Color(0xFFFFFFFF),
+    needMark: Color(0xFF1A1C1F),
   );
 }

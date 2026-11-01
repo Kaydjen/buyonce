@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/models/group.dart';
+import '../../domain/models/notice.dart';
 import '../../domain/models/product.dart';
 import '../../core/theme/app_tokens.dart';
 import '../view_models/account/account_view_model.dart';
@@ -18,13 +19,14 @@ import '../widgets/flash_on_add.dart';
 import '../widgets/group_dialogs.dart';
 import '../widgets/group_sheet.dart';
 import '../widgets/haptics.dart';
+import 'add_products_screen.dart';
 import 'group_screen.dart';
 import 'history_screen.dart';
 import 'settings_screen.dart';
 import '../widgets/notice_banner.dart';
+import '../widgets/section_label.dart';
 import '../widgets/product_row.dart';
 import '../widgets/plans_sheet.dart';
-import '../widgets/section_label.dart';
 import '../widgets/sign_in_prompt.dart';
 import '../widgets/sort_sheet.dart';
 
@@ -40,12 +42,31 @@ class _ListScreenState extends ConsumerState<ListScreen>
   final _search = TextEditingController();
   final _searchFocus = FocusNode();
   final _scroll = ScrollController();
+  final _frequentKey = GlobalKey();
   double _lastKeyboardInset = 0;
+  DateTime? _pausedAt;
+
+  /// Away from the app this long counts as a new visit: Frequent is ranked again and
+  /// the "New" group is counted from the start of the visit.
+  static const _newVisit = Duration(minutes: 5);
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _pausedAt = DateTime.now();
+    } else if (state == AppLifecycleState.resumed) {
+      final left = _pausedAt;
+      _pausedAt = null;
+      if (left != null && DateTime.now().difference(left) >= _newVisit) {
+        ref.read(listViewModelProvider.notifier).startNewVisit(left);
+      }
+    }
   }
 
   /// Hiding the keyboard (system back, hide button) leaves the focus in the field, so
@@ -82,6 +103,21 @@ class _ListScreenState extends ConsumerState<ListScreen>
     s.mode == ListMode.buy ? vm.setFinding(false) : vm.setQuery('');
   }
 
+  /// The search icon of the Frequent card: the field replaces the title and the card
+  /// scrolls to the top, so the keyboard never covers the results.
+  void _openFind() {
+    ref.read(listViewModelProvider.notifier).setFinding(true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final card = _frequentKey.currentContext;
+      if (card == null) return;
+      Scrollable.ensureVisible(
+        card,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
   void _setMode(ListMode mode) {
     _search.clear();
     ref.read(listViewModelProvider.notifier).setMode(mode);
@@ -114,10 +150,28 @@ class _ListScreenState extends ConsumerState<ListScreen>
     }
   }
 
+  /// The "Add products" screen; on return the list shows the new products from the top.
+  Future<void> _addProducts() async {
+    final changed = await Navigator.of(
+      context,
+    ).push<int>(MaterialPageRoute(builder: (_) => const AddProductsScreen()));
+    if (!mounted || changed == null || changed == 0) return;
+    if (_scroll.hasClients) {
+      _scroll.animateTo(
+        0,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text('Added: $changed')));
+  }
+
   /// Takes everything still open; the snackbar can take it back.
-  Future<void> _markAll() async {
+  Future<void> _markAll(List<Product> card) async {
     final vm = ref.read(listViewModelProvider.notifier);
-    final ids = await vm.markAll();
+    final ids = await vm.markAll(card);
     if (!mounted || ids.isEmpty) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -141,16 +195,22 @@ class _ListScreenState extends ConsumerState<ListScreen>
       ..showSnackBar(SnackBar(content: Text('Notified: $count')));
   }
 
-  /// A tap on a product another member already took: a short note at the bottom, it
-  /// goes away by itself and replaces an earlier one instead of piling up.
-  void _hintTakenBy(String name) {
+  Future<void> _ask() async {
+    Haptics.send(context);
+    final count = await ref.read(listViewModelProvider.notifier).ask();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text('Notified: $count')));
+  }
+
+  /// A tap on a product that is already taken: a short note at the bottom, it goes
+  /// away by itself and replaces an earlier one instead of piling up.
+  void _hintTaken(String text) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        SnackBar(
-          content: Text('$name already bought this'),
-          duration: const Duration(seconds: 2),
-        ),
+        SnackBar(content: Text(text), duration: const Duration(seconds: 2)),
       );
   }
 
@@ -163,7 +223,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
 
   List<String> _noticeLines(ListState s) => [
     for (final n in s.notices)
-      '${ref.watch(userNameProvider(n.fromUserId))} bought: ${[for (final id in n.productIds) s.products.where((p) => p.id == id).map((p) => p.name).firstOrNull ?? '?'].join(', ')}',
+      '${ref.watch(userNameProvider(n.fromUserId))} ${n.kind == NoticeKind.needed ? 'needs' : 'bought'}: ${[for (final id in n.productIds) s.products.where((p) => p.id == id).map((p) => p.name).firstOrNull ?? '?'].join(', ')}',
   ];
 
   bool get _signedIn => ref.read(accountViewModelProvider).value != null;
@@ -257,18 +317,44 @@ class _ListScreenState extends ConsumerState<ListScreen>
           ) ??
       false;
 
-  /// A floating action button, so a snackbar pushes it up instead of covering it.
-  Widget _sendButton(ListState s) => _SendButton(
-    visible: s.mode == ListMode.buy && s.hasUnsent,
-    count: s.myMarkIds.length,
-    autoSendAt: s.autoSendAt,
-    onSend: _notify,
-    label: _isPersonal ? 'Done' : 'Send',
+  /// Plan "Ask" needs someone to ask: a group with another member.
+  bool get _hasPartners =>
+      ref
+          .watch(groupsViewModelProvider)
+          .value
+          ?.any(
+            (g) =>
+                g.id == ref.watch(activeGroupIdProvider) &&
+                !g.personal &&
+                g.memberIds.length > 1,
+          ) ??
+      false;
+
+  /// Floating action buttons, so a snackbar pushes them up instead of covering them.
+  /// Shop has Send, Plan has Ask; one shows at a time.
+  Widget _sendButton(ListState s) => Stack(
+    alignment: Alignment.bottomRight,
+    children: [
+      _SendButton(
+        visible: s.mode == ListMode.buy && s.hasUnsent,
+        count: s.myMarkIds.length,
+        autoSendAt: s.autoSendAt,
+        onSend: _notify,
+        label: _isPersonal ? 'Done' : 'Send',
+      ),
+      _SendButton(
+        buttonKey: const Key('askButton'),
+        visible:
+            s.mode == ListMode.need && s.askProducts.isNotEmpty && _hasPartners,
+        count: s.askProducts.length,
+        autoSendAt: null,
+        onSend: _ask,
+        label: 'Notify',
+      ),
+    ],
   );
 
   Widget _content(ListState s, ListViewModel vm) {
-    final planned = s.plannedVisible;
-    final rest = s.restVisible;
     final shop = s.mode == ListMode.buy;
     return Column(
       children: [
@@ -285,48 +371,80 @@ class _ListScreenState extends ConsumerState<ListScreen>
           ),
         _header(s),
         if (shop && s.othersTaken.isNotEmpty) _presence(s),
-        if (!shop || s.finding)
+        if (!shop)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-            child: TextField(
-              key: const Key('addField'),
-              controller: _search,
-              focusNode: _searchFocus,
-              autofocus: shop,
-              decoration: InputDecoration(
-                hintText: shop ? 'Find' : 'Add product',
-                suffixIcon: s.query.isEmpty && !shop
-                    ? null
-                    : IconButton(
-                        onPressed: () => _closeField(s),
-                        icon: const Icon(Icons.close),
-                      ),
-              ),
-              textInputAction: TextInputAction.done,
-              onChanged: vm.setQuery,
-              onSubmitted: (_) => _submit(),
-            ),
+            child: _field(s, vm),
           ),
         if (s.notices.isNotEmpty)
           NoticeBanner(lines: _noticeLines(s), onDismiss: vm.dismissNotices),
         Expanded(
           child: ListView(
             controller: _scroll,
-            // Bottom room so the notify button never covers the last row.
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 136),
+            // Bottom room so the Send button never covers the last row; while
+            // searching, room to scroll the Frequent title to the top.
+            padding: EdgeInsets.fromLTRB(
+              16,
+              4,
+              16,
+              shop && s.finding ? MediaQuery.sizeOf(context).height * 0.6 : 136,
+            ),
             children: [
-              // Search results are one flat list, so a tap changes a row in place
-              // instead of moving it into another group.
-              if (s.flatList) ...[
-                if (s.visible.isNotEmpty)
-                  _group(s, s.visible, vm, isPlanned: false),
-              ] else ...[
-                if (planned.isNotEmpty) ...[
-                  if (!shop) const SectionLabel('List'),
-                  _group(s, planned, vm, isPlanned: true),
+              if (shop) ...[
+                // Rows never move on a tap. What another member added since my last
+                // visit stays in place and shows the author under the name.
+                if (s.toBuy.isNotEmpty) ...[
+                  _card(
+                    key: const Key('toBuyCard'),
+                    title: _cardTitle(
+                      'To buy',
+                      trailing: _markAllButton(
+                        s,
+                        s.toBuy,
+                        const Key('markAll'),
+                      ),
+                    ),
+                    body: _group(s, s.toBuy, vm, planned: true, divider: true),
+                  ),
                   const SizedBox(height: 16),
                 ],
-                if (rest.isNotEmpty) _group(s, rest, vm, isPlanned: false),
+                KeyedSubtree(
+                  key: const Key('frequentCard'),
+                  child: _card(
+                    key: _frequentKey,
+                    title: s.finding
+                        ? Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                            child: _field(s, vm),
+                          )
+                        : _cardTitle(
+                            'Frequent',
+                            trailing: IconButton(
+                              key: const Key('findButton'),
+                              onPressed: _openFind,
+                              icon: const Icon(Icons.search),
+                            ),
+                          ),
+                    body: Column(
+                      key: const Key('frequentRows'),
+                      children: [
+                        for (final p in s.frequentShown)
+                          _row(s, p, vm, key: ValueKey(p.id), divider: true),
+                      ],
+                    ),
+                  ),
+                ),
+              ] else ...[
+                // Plan is one list: a needed product is marked in place. What another
+                // member added since my last visit sits on top as one "New" group.
+                if (s.newProducts.isNotEmpty) ...[
+                  _newGroup(s, vm),
+                  const SizedBox(height: 16),
+                ],
+                if (s.searching
+                    ? s.visible.isNotEmpty
+                    : s.plainProducts.isNotEmpty)
+                  _group(s, s.searching ? s.visible : s.plainProducts, vm),
               ],
               if (s.canAdd)
                 Padding(
@@ -342,6 +460,64 @@ class _ListScreenState extends ConsumerState<ListScreen>
       ],
     );
   }
+
+  /// The one search field: Plan keeps it above the list, Shop inside the Frequent card.
+  Widget _field(ListState s, ListViewModel vm) {
+    final shop = s.mode == ListMode.buy;
+    return TextField(
+      key: const Key('addField'),
+      controller: _search,
+      focusNode: _searchFocus,
+      autofocus: shop,
+      decoration: InputDecoration(
+        hintText: shop ? 'Find' : 'Search',
+        suffixIcon: s.query.isEmpty && !shop
+            ? null
+            : IconButton(
+                onPressed: () => _closeField(s),
+                icon: const Icon(Icons.close),
+              ),
+      ),
+      textInputAction: TextInputAction.done,
+      onChanged: vm.setQuery,
+      onSubmitted: (_) => _submit(),
+    );
+  }
+
+  /// A Shop card: a centred title, then rows.
+  Widget _card({Key? key, required Widget title, required Widget body}) =>
+      ClipRRect(
+        key: key,
+        borderRadius: BorderRadius.circular(14),
+        child: Material(
+          color: context.tokens.surface,
+          child: Column(children: [title, body]),
+        ),
+      );
+
+  Widget _cardTitle(String text, {Widget? trailing}) => SizedBox(
+    height: 56,
+    child: Stack(
+      alignment: Alignment.center,
+      children: [
+        Padding(
+          // Room for a button on the right; the title stays centred.
+          padding: EdgeInsets.symmetric(
+            horizontal: trailing == null ? 16 : 112,
+          ),
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleMedium!
+                .copyWith(color: context.tokens.muted),
+          ),
+        ),
+        if (trailing != null)
+          Align(alignment: Alignment.centerRight, child: trailing),
+      ],
+    ),
+  );
 
   /// Who else is shopping now and how much they have taken.
   Widget _presence(ListState s) {
@@ -397,17 +573,24 @@ class _ListScreenState extends ConsumerState<ListScreen>
               ),
             ),
           ),
-          if (shop && !s.finding && s.untaken.isNotEmpty)
-            TextButton(
-              key: const Key('markAll'),
-              onPressed: _markAll,
-              child: const Text('Mark all'),
+          if (!shop && s.toBuyCount > 0)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                '${s.toBuyCount} to buy',
+                key: const Key('toBuyCount'),
+                style: Theme.of(context).textTheme.bodyMedium!
+                    .copyWith(color: context.tokens.muted),
+              ),
             ),
-          if (shop && !s.finding)
-            IconButton(
-              onPressed: () =>
-                  ref.read(listViewModelProvider.notifier).setFinding(true),
-              icon: const Icon(Icons.search),
+          if (!shop)
+            TextButton(
+              key: const Key('addProducts'),
+              onPressed: _addProducts,
+              style: TextButton.styleFrom(
+                foregroundColor: context.tokens.muted,
+              ),
+              child: const Text('Add'),
             ),
           PopupMenuButton<String>(
             key: const Key('menuButton'),
@@ -458,12 +641,61 @@ class _ListScreenState extends ConsumerState<ListScreen>
   String _nameOf(String? userId) =>
       userId == null ? '' : ref.watch(userNameProvider(userId));
 
-  /// Long press starts a drag; reordering stays inside the group.
+  /// "New · Anna": who added the products, once each, in the order of the rows.
+  String _newLabel(ListState s) {
+    final authors = {for (final p in s.newProducts) _nameOf(p.plannedBy)}
+        .where((n) => n.isNotEmpty)
+        .join(', ');
+    return authors.isEmpty ? 'New' : 'New · $authors';
+  }
+
+  /// "Mark all" of one card: takes that card's products nobody has taken yet; null
+  /// when there are none.
+  Widget? _markAllButton(ListState s, List<Product> card, Key key) =>
+      s.untakenOf(card).isEmpty
+      ? null
+      : TextButton(
+          key: key,
+          onPressed: () => _markAll(card),
+          child: const Text('Mark all'),
+        );
+
+  /// Plan: the "New" group, one label, then plain rows that are tapped in place; no
+  /// drag. Shop has no group: the rows show the author instead.
+  Widget _newGroup(ListState s, ListViewModel vm) {
+    final fresh = s.newProducts;
+    return Column(
+      key: const Key('newGroup'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionLabel(_newLabel(s), color: context.tokens.accent),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Column(
+            children: [
+              for (var i = 0; i < fresh.length; i++)
+                _row(
+                  s,
+                  fresh[i],
+                  vm,
+                  key: ValueKey(fresh[i].id),
+                  divider: i > 0,
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Long press starts a drag; reordering stays inside the list shown here. [planned]
+  /// only tells the To buy card from the Plan list.
   Widget _group(
     ListState s,
     List<Product> products,
     ListViewModel vm, {
-    required bool isPlanned,
+    bool? planned,
+    bool divider = false,
   }) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(14),
@@ -472,40 +704,68 @@ class _ListScreenState extends ConsumerState<ListScreen>
         physics: const NeverScrollableScrollPhysics(),
         buildDefaultDragHandles: false,
         itemCount: products.length,
-        onReorderItem: (oldIndex, newIndex) => vm.reorder(
-          planned: isPlanned,
-          oldIndex: oldIndex,
-          newIndex: newIndex,
-        ),
+        onReorderItem: (oldIndex, newIndex) =>
+            vm.reorder(group: products, oldIndex: oldIndex, newIndex: newIndex),
         itemBuilder: (context, i) {
           final p = products[i];
-          final mark = s.markOf(p.id);
           return ReorderableDelayedDragStartListener(
             key: ValueKey(p.id),
             index: i,
             enabled: s.canReorder,
-            child: FlashOnAdd(
-              flash: s.flashId == p.id,
-              child: ProductRow(
-                name: p.name,
-                mark: mark,
-                planned: s.searching && s.mode == ListMode.need && p.planned,
-                takenBy: _nameOf(s.partnerOf(p.id)),
-                minHeight: s.mode == ListMode.buy ? 64 : 56,
-                showDivider: i > 0,
-                onTap: () {
-                  if (mark == RowMark.partner) {
-                    _hintTakenBy(_nameOf(s.partnerOf(p.id)));
-                    return;
-                  }
-                  if (s.mode == ListMode.buy) {
-                    Haptics.tick(context);
-                  }
-                  vm.tap(p);
-                },
-              ),
+            child: _row(
+              s,
+              p,
+              vm,
+              divider: divider || i > 0,
+              // The same product can be in a search result too; only one blinks.
+              flash: !(s.finding && planned == true),
             ),
           );
+        },
+      ),
+    );
+  }
+
+  Widget _row(
+    ListState s,
+    Product p,
+    ListViewModel vm, {
+    Key? key,
+    required bool divider,
+    bool flash = true,
+  }) {
+    final plan = s.mode == ListMode.need;
+    final mark = s.markOf(p.id);
+    // Shop has no "New" group: such a row names its author under the product.
+    final addedBy = !plan && s.newProducts.any((n) => n.id == p.id)
+        ? _nameOf(p.plannedBy)
+        : '';
+    return FlashOnAdd(
+      key: key,
+      flash: flash && s.flashId == p.id,
+      child: ProductRow(
+        name: p.name,
+        mark: mark,
+        needed: plan && p.planned,
+        takenBy: _nameOf(s.partnerOf(p.id)),
+        addedBy: addedBy,
+        minHeight: plan ? 56 : 64,
+        showDivider: divider,
+        onTap: () {
+          if (mark == RowMark.partner) {
+            _hintTaken('${_nameOf(s.partnerOf(p.id))} already bought this');
+            return;
+          }
+          // Plan never unmarks: a product that vanished from the trip would
+          // raise "where did it go".
+          if (plan && mark == RowMark.mine) {
+            _hintTaken('You already bought this');
+            return;
+          }
+          if (s.mode == ListMode.buy) {
+            Haptics.tick(context);
+          }
+          vm.tap(p);
         },
       ),
     );
@@ -516,12 +776,14 @@ class _ListScreenState extends ConsumerState<ListScreen>
 /// with my first unsent mark; above it the auto-send time.
 class _SendButton extends StatelessWidget {
   const _SendButton({
+    this.buttonKey = const Key('sendButton'),
     required this.visible,
     required this.count,
     required this.autoSendAt,
     required this.onSend,
     required this.label,
   });
+  final Key buttonKey;
   final bool visible;
   final int count;
   final DateTime? autoSendAt;
@@ -548,7 +810,7 @@ class _SendButton extends StatelessWidget {
               if (autoSendAt != null) _AutoChip(at: autoSendAt!),
               const SizedBox(height: 8),
               FilledButton(
-                key: const Key('sendButton'),
+                key: buttonKey,
                 style: FilledButton.styleFrom(
                   backgroundColor: context.tokens.accent,
                   foregroundColor: context.tokens.onAccent,

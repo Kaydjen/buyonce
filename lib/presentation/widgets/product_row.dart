@@ -8,8 +8,9 @@ class ProductRow extends StatelessWidget {
     super.key,
     required this.name,
     this.mark = RowMark.none,
-    this.planned = false,
+    this.needed = false,
     this.takenBy = '',
+    this.addedBy = '',
     this.minHeight = 56,
     required this.showDivider,
     required this.onTap,
@@ -21,12 +22,17 @@ class ProductRow extends StatelessWidget {
   /// member's name (up to 10 characters) if someone else did.
   final RowMark mark;
 
-  /// Planned product shown inside a flat search result: a plain check, no dimming.
-  final bool planned;
+  /// Needed product in Plan: a bar on the left, the row never moves. A taken row shows
+  /// its check instead.
+  final bool needed;
 
   /// Name of the member who took the product; shown next to the check for another
   /// member's mark, never for mine.
   final String takenBy;
+
+  /// Shop: the member who made the product needed since my last visit; shown under
+  /// the name (accent while open, muted once taken). Empty: nothing is shown.
+  final String addedBy;
 
   /// Row height: Shop rows are taller, they are tapped while walking.
   final double minHeight;
@@ -36,57 +42,89 @@ class ProductRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final taken = mark != RowMark.none;
-    return Material(
-      color: taken ? context.tokens.tint : context.tokens.surface,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          constraints: BoxConstraints(minHeight: minHeight),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            border: showDivider
-                ? Border(top: BorderSide(color: context.tokens.line))
-                : null,
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
+    final content = Container(
+      constraints: BoxConstraints(minHeight: minHeight),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        border: showDivider
+            ? Border(top: BorderSide(color: context.tokens.line))
+            : null,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
                   name,
                   style: Theme.of(context).textTheme.bodyLarge!.copyWith(
                     color: taken ? context.tokens.muted : context.tokens.text,
                   ),
                 ),
-              ),
-              if (mark == RowMark.mine)
-                Icon(Icons.check, size: 20, color: context.tokens.accent)
-              else if (mark == RowMark.partner)
-                Row(
-                  key: const Key('partnerMark'),
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.check,
-                      key: const Key('partnerCheck'),
-                      size: 20,
-                      color: context.tokens.muted,
+                if (addedBy.isNotEmpty)
+                  Text(
+                    addedBy,
+                    key: const Key('addedBy'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall!.copyWith(
+                      color: taken
+                          ? context.tokens.muted
+                          : context.tokens.accent,
                     ),
-                    const SizedBox(width: 4),
-                    Text(
-                      takenBy,
-                      maxLines: 1,
-                      softWrap: false,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium!
-                          .copyWith(color: context.tokens.muted),
-                    ),
-                  ],
-                )
-              else if (planned)
-                Icon(Icons.check, size: 20, color: context.tokens.text),
-            ],
+                  ),
+              ],
+            ),
           ),
-        ),
+          if (mark == RowMark.mine)
+            Icon(Icons.check, size: 20, color: context.tokens.text)
+          else if (mark == RowMark.partner)
+            Row(
+              key: const Key('partnerMark'),
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.check,
+                  key: const Key('partnerCheck'),
+                  size: 20,
+                  color: context.tokens.muted,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  takenBy,
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium!
+                      .copyWith(color: context.tokens.muted),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+    return Material(
+      color: taken ? context.tokens.tint : context.tokens.surface,
+      child: InkWell(
+        onTap: onTap,
+        child: needed && !taken
+            ? Stack(
+                children: [
+                  content,
+                  Positioned(
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    child: Container(
+                      key: const Key('needMark'),
+                      width: 4,
+                      color: context.tokens.needMark,
+                    ),
+                  ),
+                ],
+              )
+            : content,
       ),
     );
   }

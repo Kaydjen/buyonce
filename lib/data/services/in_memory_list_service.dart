@@ -182,6 +182,21 @@ class InMemoryListService {
   final Map<String, Trip> _trips = {};
   final Map<String, Notice> _notices = {};
 
+  /// When each user last asked for products in each group, by `group/user`.
+  final Map<String, DateTime> _askedAt = {};
+
+  Future<Result<DateTime?>> getAskedAt(String groupId, String userId) async =>
+      Ok(_askedAt['$groupId/$userId']);
+
+  Future<Result<void>> putAskedAt(
+    String groupId,
+    String userId,
+    DateTime at,
+  ) async {
+    _askedAt['$groupId/$userId'] = at;
+    return const Ok<void>(null);
+  }
+
   Future<Result<List<Product>>> getProducts(String groupId) async =>
       Ok(_products.values.where((p) => p.groupId == groupId).toList());
 
@@ -229,6 +244,7 @@ class InMemoryListService {
     _plans.removeWhere((_, p) => p.groupId == groupId);
     _trips.removeWhere((_, t) => t.groupId == groupId);
     _notices.removeWhere((_, n) => n.groupId == groupId);
+    _askedAt.removeWhere((key, _) => key.startsWith('$groupId/'));
     return const Ok<void>(null);
   }
 
@@ -241,6 +257,7 @@ class InMemoryListService {
     _notices.removeWhere(
       (_, n) => n.groupId == groupId && n.toUserId == userId,
     );
+    _askedAt.remove('$groupId/$userId');
     return const Ok<void>(null);
   }
 }

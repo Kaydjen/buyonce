@@ -71,9 +71,15 @@ class _PlansSheetState extends ConsumerState<PlansSheet> {
           child: const Text('Delete'),
         ),
         child: InkWell(
-          onTap: () {
-            vm.applyPlan(plan);
+          onTap: () async {
+            // The marks land all over the catalog, so the count tells what happened.
+            final messenger = ScaffoldMessenger.of(context);
             Navigator.of(context).pop();
+            final added = await vm.applyPlan(plan);
+            if (added == 0) return;
+            messenger
+              ..hideCurrentSnackBar()
+              ..showSnackBar(SnackBar(content: Text('Added: $added')));
           },
           child: Padding(
             padding: const EdgeInsets.only(left: 16),

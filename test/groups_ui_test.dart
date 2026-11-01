@@ -85,8 +85,14 @@ void main() {
     expect(shownGroup(tester), 'Personal');
     expect(find.byKey(const Key('tabShop')), findsOneWidget);
     expect(find.byType(ProductRow), findsNothing);
+    // Shop is the start screen; with no history it still has Frequent and its search.
+    expect(find.text('Frequent'), findsOneWidget);
+    expect(find.byKey(const Key('findButton')), findsOneWidget);
+    expect(find.text('To buy'), findsNothing);
 
     // Add a product on Plan, mark it on Shop, close the trip.
+    await tester.tap(find.byKey(const Key('tabPlan')));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('addField')), 'Tea');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
@@ -159,6 +165,8 @@ void main() {
     tester,
   ) async {
     await pumpApp(tester, seed: false);
+    await tester.tap(find.byKey(const Key('tabPlan')));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('addField')), 'Tea');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();

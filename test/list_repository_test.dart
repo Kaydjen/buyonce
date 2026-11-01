@@ -109,7 +109,7 @@ void main() {
     expect(saved.productIds, isNot(contains(other.id)));
 
     // The same products sent again only refresh the plan.
-    await repo.setPlanned(bought, true);
+    await repo.setPlanned(bought, true, 'me');
     await repo.toggleMark(bought.id, 'me');
     await repo.toggleMark('seed2', 'me');
     await repo.sendTrip('me');

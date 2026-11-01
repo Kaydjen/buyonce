@@ -6,6 +6,7 @@ import 'package:buyonce/domain/models/app_settings.dart';
 import 'package:buyonce/main.dart';
 import 'package:buyonce/presentation/view_models/groups/groups_view_model.dart';
 import 'package:buyonce/presentation/view_models/list/list_view_model.dart';
+import 'package:buyonce/presentation/view_models/session/session.dart';
 import 'package:buyonce/presentation/view_models/settings/settings_view_model.dart';
 import 'package:buyonce/presentation/view_models/users/user_names_view_model.dart';
 import 'package:flutter/material.dart';
@@ -90,6 +91,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('sendButton')), findsOneWidget);
       expectNoOverflow(tester, 'Shop');
+      await tester.tap(find.byKey(const Key('findButton')));
+      await tester.pumpAndSettle();
+      expectNoOverflow(tester, 'Shop search');
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
 
       // Menu and the sheets behind it (Sort and Templates are Plan items).
       await tester.tap(find.byKey(const Key('tabPlan')));
@@ -105,6 +111,19 @@ void main() {
       await tapText(tester, 'Templates');
       expectNoOverflow(tester, 'templates sheet');
       await closeTop(tester);
+
+      // Add products: a long draft row and the Add button.
+      await tester.tap(find.byKey(const Key('addProducts')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('draftField')),
+        'Very long product name that has to wrap on a narrow phone',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expectNoOverflow(tester, 'add products');
+      await tester.pageBack();
+      await tester.pumpAndSettle();
 
       // Group sheet, dialogs, group screen.
       await tester.tap(find.byKey(const Key('groupButton')));
@@ -178,6 +197,52 @@ void main() {
       await pumpAt(tester, scale, seed: false);
       expect(find.byKey(const Key('tabShop')), findsOneWidget);
       expectNoOverflow(tester, 'fresh install');
+    });
+
+    testWidgets('the New group holds at ${scale.name}', (tester) async {
+      await pumpAt(tester, scale);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(MaterialApp)),
+      );
+      container
+          .read(visitTrackerProvider)
+          .end('me', DateTime.now().subtract(const Duration(seconds: 1)));
+      final repo = container.read(listRepositoryProvider);
+      await repo.addProducts(['Pears', 'Plums with a long name'], 'partner');
+      await container.read(listViewModelProvider.notifier).refresh();
+      await tester.pumpAndSettle();
+      // The app starts on Shop: New is a card there, a group in Plan. A long author
+      // name must not collide with the card's Mark all.
+      await container
+          .read(userNamesProvider.notifier)
+          .setName('partner', 'Bartholome');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('addedBy')), findsNWidgets(2));
+      expectNoOverflow(tester, 'Shop with New');
+      await tester.tap(find.byKey(const Key('tabPlan')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('newGroup')), findsOneWidget);
+      expectNoOverflow(tester, 'Plan with New');
+    });
+
+    testWidgets('Ask and its notice hold at ${scale.name}', (tester) async {
+      await pumpAt(tester, scale);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(MaterialApp)),
+      );
+      final repo = container.read(listRepositoryProvider);
+      await repo.addProducts(['Pears', 'Plums with a long name'], 'me');
+      final vm = container.read(listViewModelProvider.notifier);
+      await vm.refresh();
+      await tester.tap(find.byKey(const Key('tabPlan')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('askButton')).hitTestable(), findsOneWidget);
+      expectNoOverflow(tester, 'Plan with Ask');
+      await vm.ask();
+      await vm.selectUser('partner');
+      await tester.pumpAndSettle();
+      expect(find.textContaining('needs:'), findsOneWidget);
+      expectNoOverflow(tester, 'Plan with a needs notice');
     });
   }
 
