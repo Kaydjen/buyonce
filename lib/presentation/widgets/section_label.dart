@@ -14,8 +14,10 @@ class SectionLabel extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(2, 4, 2, 6),
     child: Text(
       text.toUpperCase(),
-      style: Theme.of(context).textTheme.labelMedium!
-          .copyWith(letterSpacing: 0.6, color: color ?? context.tokens.muted),
+      style: Theme.of(context).textTheme.labelMedium!.copyWith(
+        letterSpacing: context.tokens.labelSpacing,
+        color: color ?? context.tokens.muted,
+      ),
     ),
   );
 }

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/theme/app_theme.dart';
 import 'domain/models/app_settings.dart';
+import 'presentation/view_models/settings/style_variant_view_model.dart';
 import 'presentation/view_models/settings/settings_view_model.dart';
 import 'presentation/screens/app_gate.dart';
 
@@ -16,11 +17,12 @@ class BuyOnceApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final variant = ref.watch(styleVariantProvider);
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'BuyOnce',
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
+      theme: AppTheme.light(variant),
+      darkTheme: AppTheme.dark(variant),
       themeMode: switch (ref.watch(settingsProvider.select((s) => s.theme))) {
         ThemeChoice.system => ThemeMode.system,
         ThemeChoice.light => ThemeMode.light,

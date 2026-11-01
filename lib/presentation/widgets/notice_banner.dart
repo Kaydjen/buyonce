@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_tokens.dart';
+import 'panel.dart';
 
 /// A stand-in for the partner's push: who bought what. A tap dismisses it.
 class NoticeBanner extends StatelessWidget {
@@ -13,11 +14,9 @@ class NoticeBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      child: Material(
-        color: context.tokens.tint,
-        borderRadius: BorderRadius.circular(14),
+      child: Panel(
+        tinted: true,
         child: InkWell(
-          borderRadius: BorderRadius.circular(14),
           onTap: onDismiss,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

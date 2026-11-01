@@ -1,10 +1,14 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_tokens.dart';
+import '../../core/theme/style_variant.dart';
 import '../../domain/models/app_settings.dart';
 import '../view_models/settings/settings_view_model.dart';
+import '../view_models/settings/style_variant_view_model.dart';
 import '../widgets/account_section.dart';
+import '../widgets/panel.dart';
 import '../widgets/section_label.dart';
 import '../widgets/version_row.dart';
 
@@ -16,6 +20,8 @@ String periodLabel(int seconds) =>
 /// stored values.
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
+
+  static const _inner = EdgeInsets.symmetric(horizontal: 16);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -32,27 +38,35 @@ class SettingsScreen extends ConsumerWidget {
         ),
         children: [
           const SectionLabel('Auto-send'),
-          SwitchListTile(
-            key: const Key('autoSendSwitch'),
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Auto-send'),
-            value: settings.autoSendEnabled,
-            onChanged: vm.setAutoSendEnabled,
-          ),
-          ListTile(
-            key: const Key('autoSendPeriod'),
-            contentPadding: EdgeInsets.zero,
-            enabled: settings.autoSendEnabled,
-            title: const Text('Send after'),
-            trailing: Text(
-              periodLabel(settings.autoSendSeconds),
-              style: TextStyle(
-                color: settings.autoSendEnabled
-                    ? null
-                    : context.tokens.muted.withValues(alpha: 0.5),
-              ),
+          Panel(
+            padding: _inner,
+            child: Column(
+              children: [
+                SwitchListTile(
+                  key: const Key('autoSendSwitch'),
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Auto-send'),
+                  value: settings.autoSendEnabled,
+                  onChanged: vm.setAutoSendEnabled,
+                ),
+                ListTile(
+                  key: const Key('autoSendPeriod'),
+                  contentPadding: EdgeInsets.zero,
+                  enabled: settings.autoSendEnabled,
+                  title: const Text('Send after'),
+                  trailing: Text(
+                    periodLabel(settings.autoSendSeconds),
+                    style: TextStyle(
+                      color: settings.autoSendEnabled
+                          ? null
+                          : context.tokens.muted.withValues(alpha: 0.5),
+                    ),
+                  ),
+                  onTap: () =>
+                      _pickPeriod(context, vm, settings.autoSendSeconds),
+                ),
+              ],
             ),
-            onTap: () => _pickPeriod(context, vm, settings.autoSendSeconds),
           ),
           const SectionLabel('Theme'),
           SegmentedButton<ThemeChoice>(
@@ -65,6 +79,20 @@ class SettingsScreen extends ConsumerWidget {
             selected: {settings.theme},
             onSelectionChanged: (s) => vm.setTheme(s.first),
           ),
+          if (kDebugMode) ...[
+            const SectionLabel('Style (debug)'),
+            SegmentedButton<StyleVariant>(
+              key: const Key('styleSelector'),
+              showSelectedIcon: false,
+              segments: [
+                for (final v in StyleVariant.values)
+                  ButtonSegment(value: v, label: Text(v.label)),
+              ],
+              selected: {ref.watch(styleVariantProvider)},
+              onSelectionChanged: (s) =>
+                  ref.read(styleVariantProvider.notifier).select(s.first),
+            ),
+          ],
           const SectionLabel('Text size'),
           SegmentedButton<TextScaleChoice>(
             key: const Key('textScaleSelector'),
@@ -83,9 +111,9 @@ class SettingsScreen extends ConsumerWidget {
             onSelectionChanged: (s) => vm.setTextScale(s.first),
           ),
           const SectionLabel('Account'),
-          const AccountSection(),
+          const Panel(padding: _inner, child: AccountSection()),
           const SectionLabel('Version'),
-          const VersionRow(),
+          const Panel(padding: _inner, child: VersionRow()),
         ],
       ),
     );

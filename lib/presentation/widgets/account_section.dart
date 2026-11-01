@@ -17,6 +17,13 @@ import 'sign_in_prompt.dart';
 class AccountSection extends ConsumerWidget {
   const AccountSection({super.key});
 
+  /// Text buttons start at the same edge as the tiles above them.
+  static final _flush = TextButton.styleFrom(
+    padding: EdgeInsets.zero,
+    minimumSize: const Size(0, 48),
+    alignment: Alignment.centerLeft,
+  );
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final account = ref.watch(accountViewModelProvider);
@@ -55,11 +62,13 @@ class AccountSection extends ConsumerWidget {
         ),
         TextButton(
           key: const Key('signOut'),
+          style: _flush,
           onPressed: () => _signOut(context, ref),
           child: const Text('Sign out'),
         ),
         TextButton(
           key: const Key('deleteAccount'),
+          style: _flush,
           onPressed: () => _delete(context, ref, me),
           child: const Text('Delete account'),
         ),
@@ -71,6 +80,7 @@ class AccountSection extends ConsumerWidget {
   /// Debug only: the fake users start signed in, so this is the way to the login screen.
   Widget _debugLoginButton(BuildContext context, WidgetRef ref) => TextButton(
     key: const Key('debugShowLogin'),
+    style: _flush,
     onPressed: () async {
       await ref.read(accountViewModelProvider.notifier).debugShowLogin();
       if (context.mounted) {

@@ -7,6 +7,7 @@ import '../view_models/history/history_days.dart';
 import '../view_models/history/history_view_model.dart';
 import '../view_models/session/session.dart';
 import '../view_models/users/user_names_view_model.dart';
+import '../widgets/panel.dart';
 import '../widgets/section_label.dart';
 
 /// What was bought, by day and with the time of the mark. Your own purchases carry no
@@ -46,28 +47,39 @@ class HistoryScreen extends ConsumerWidget {
           children: [
             for (final day in groupByDay(value, offset, DateTime.now())) ...[
               SectionLabel(day.label),
-              for (final p in day.purchases)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          p.productName,
-                          style: Theme.of(context).textTheme.bodyLarge,
+              Panel(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
+                child: Column(
+                  children: [
+                    for (final p in day.purchases)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                p.productName,
+                                style: Theme.of(context).textTheme.bodyLarge,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              p.userId == me
+                                  ? timeLabel(p.markedAt, offset)
+                                  : '${ref.watch(userNameProvider(p.userId))}  '
+                                        '${timeLabel(p.markedAt, offset)}',
+                              style: TextStyle(color: context.tokens.muted),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Text(
-                        p.userId == me
-                            ? timeLabel(p.markedAt, offset)
-                            : '${ref.watch(userNameProvider(p.userId))}  '
-                                  '${timeLabel(p.markedAt, offset)}',
-                        style: TextStyle(color: context.tokens.muted),
-                      ),
-                    ],
-                  ),
+                  ],
                 ),
+              ),
+              const SizedBox(height: 12),
             ],
           ],
         ),

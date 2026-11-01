@@ -25,6 +25,7 @@ import 'history_screen.dart';
 import 'settings_screen.dart';
 import '../widgets/notice_banner.dart';
 import '../widgets/section_label.dart';
+import '../widgets/panel.dart';
 import '../widgets/product_row.dart';
 import '../widgets/plans_sheet.dart';
 import '../widgets/sign_in_prompt.dart';
@@ -404,7 +405,14 @@ class _ListScreenState extends ConsumerState<ListScreen>
                         const Key('markAll'),
                       ),
                     ),
-                    body: _group(s, s.toBuy, vm, planned: true, divider: true),
+                    body: _group(
+                      s,
+                      s.toBuy,
+                      vm,
+                      planned: true,
+                      divider: true,
+                      framed: false,
+                    ),
                   ),
                   const SizedBox(height: 16),
                 ],
@@ -486,14 +494,15 @@ class _ListScreenState extends ConsumerState<ListScreen>
 
   /// A Shop card: a centred title, then rows.
   Widget _card({Key? key, required Widget title, required Widget body}) =>
-      ClipRRect(
+      _rounded(
         key: key,
-        borderRadius: BorderRadius.circular(14),
-        child: Material(
-          color: context.tokens.surface,
-          child: Column(children: [title, body]),
-        ),
+        child: Column(children: [title, body]),
       );
+
+  /// Cards and row groups share one rounded shape; an outline when the style asks for
+  /// it.
+  Widget _rounded({Key? key, required Widget child}) =>
+      Panel(key: key, child: child);
 
   Widget _cardTitle(String text, {Widget? trailing}) => SizedBox(
     height: 56,
@@ -506,7 +515,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
             horizontal: trailing == null ? 16 : 112,
           ),
           child: Text(
-            text,
+            context.tokens.capsTitles ? text.toUpperCase() : text,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.titleMedium!
@@ -541,8 +550,15 @@ class _ListScreenState extends ConsumerState<ListScreen>
   /// The tint repeats the bottom tab, so the screen is never mistaken.
   Widget _header(ListState s) {
     final shop = s.mode == ListMode.buy;
+    final t = context.tokens;
     return Container(
-      color: shop ? context.tokens.tint : context.tokens.background,
+      margin: t.pillTabs
+          ? EdgeInsets.symmetric(horizontal: t.inset, vertical: 4)
+          : null,
+      decoration: BoxDecoration(
+        color: shop ? t.tint : t.background,
+        borderRadius: t.pillTabs ? BorderRadius.circular(t.radiusCard) : null,
+      ),
       padding: const EdgeInsets.only(left: 8, right: 4),
       height: 56,
       child: Row(
@@ -669,8 +685,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SectionLabel(_newLabel(s), color: context.tokens.accent),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(14),
+        _rounded(
           child: Column(
             children: [
               for (var i = 0; i < fresh.length; i++)
@@ -696,34 +711,33 @@ class _ListScreenState extends ConsumerState<ListScreen>
     ListViewModel vm, {
     bool? planned,
     bool divider = false,
+    bool framed = true,
   }) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
-      child: ReorderableListView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        buildDefaultDragHandles: false,
-        itemCount: products.length,
-        onReorderItem: (oldIndex, newIndex) =>
-            vm.reorder(group: products, oldIndex: oldIndex, newIndex: newIndex),
-        itemBuilder: (context, i) {
-          final p = products[i];
-          return ReorderableDelayedDragStartListener(
-            key: ValueKey(p.id),
-            index: i,
-            enabled: s.canReorder,
-            child: _row(
-              s,
-              p,
-              vm,
-              divider: divider || i > 0,
-              // The same product can be in a search result too; only one blinks.
-              flash: !(s.finding && planned == true),
-            ),
-          );
-        },
-      ),
+    final list = ReorderableListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      buildDefaultDragHandles: false,
+      itemCount: products.length,
+      onReorderItem: (oldIndex, newIndex) =>
+          vm.reorder(group: products, oldIndex: oldIndex, newIndex: newIndex),
+      itemBuilder: (context, i) {
+        final p = products[i];
+        return ReorderableDelayedDragStartListener(
+          key: ValueKey(p.id),
+          index: i,
+          enabled: s.canReorder,
+          child: _row(
+            s,
+            p,
+            vm,
+            divider: divider || i > 0,
+            // The same product can be in a search result too; only one blinks.
+            flash: !(s.finding && planned == true),
+          ),
+        );
+      },
     );
+    return framed ? _rounded(child: list) : list;
   }
 
   Widget _row(
@@ -809,20 +823,33 @@ class _SendButton extends StatelessWidget {
             children: [
               if (autoSendAt != null) _AutoChip(at: autoSendAt!),
               const SizedBox(height: 8),
-              FilledButton(
-                key: buttonKey,
-                style: FilledButton.styleFrom(
-                  backgroundColor: context.tokens.accent,
-                  foregroundColor: context.tokens.onAccent,
-                  minimumSize: const Size(0, 56),
-                  padding: const EdgeInsets.symmetric(horizontal: 28),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(
+                    context.tokens.radiusButton,
+                  ),
+                  boxShadow: context.tokens.glow == 0
+                      ? null
+                      : [
+                          BoxShadow(
+                            color: context.tokens.accent.withValues(alpha: 0.4),
+                            blurRadius: context.tokens.glow,
+                          ),
+                        ],
                 ),
-                onPressed: onSend,
-                child: Text(
-                  '$label $count',
-                  style: Theme.of(context).textTheme.titleMedium!.copyWith(
-                    fontWeight: FontWeight.w500,
-                    color: context.tokens.onAccent,
+                child: FilledButton(
+                  key: buttonKey,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: context.tokens.accent,
+                    foregroundColor: context.tokens.onAccent,
+                    minimumSize: const Size(0, 56),
+                    padding: const EdgeInsets.symmetric(horizontal: 28),
+                  ),
+                  onPressed: onSend,
+                  child: Text(
+                    '$label $count',
+                    style: Theme.of(context).textTheme.titleMedium!
+                        .copyWith(color: context.tokens.onAccent),
                   ),
                 ),
               ),
@@ -905,22 +932,72 @@ class _ModeBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
+    final tabs = Row(
+      children: [
+        _tab(context, ListMode.need, 'Plan', const Key('tabPlan')),
+        _tab(context, ListMode.buy, 'Shop', const Key('tabShop')),
+      ],
+    );
+    if (!t.pillTabs) {
+      return Material(
+        color: t.surface,
+        child: SafeArea(top: false, child: tabs),
+      );
+    }
+    // A floating pill; the selected tab is a lighter pill inside it.
     return Material(
-      color: context.tokens.surface,
+      color: t.background,
       child: SafeArea(
         top: false,
-        child: Row(
-          children: [
-            _tab(context, ListMode.need, 'Plan', const Key('tabPlan')),
-            _tab(context, ListMode.buy, 'Shop', const Key('tabShop')),
-          ],
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(t.gutter, 4, t.gutter, 8),
+          child: Container(
+            height: 56,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [t.lift ?? t.surface, t.surface],
+              ),
+              borderRadius: BorderRadius.circular(t.radiusButton),
+              border: Border.all(color: t.line, width: t.lineWidth),
+            ),
+            child: tabs,
+          ),
         ),
       ),
     );
   }
 
   Widget _tab(BuildContext context, ListMode m, String label, Key key) {
+    final t = context.tokens;
     final selected = mode == m;
+    final text = Text(
+      label,
+      style: t.weighted(
+        Theme.of(context).textTheme.titleMedium!
+            .copyWith(color: selected ? t.text : t.muted),
+        selected ? t.titleWeight : t.bodyWeight,
+      ),
+    );
+    if (t.pillTabs) {
+      return Expanded(
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Material(
+            color: selected ? t.tint : const Color(0x00000000),
+            borderRadius: BorderRadius.circular(t.radiusButton),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              key: key,
+              onTap: () => onSelect(m),
+              child: Center(child: text),
+            ),
+          ),
+        ),
+      );
+    }
     return Expanded(
       child: InkWell(
         key: key,
@@ -931,18 +1008,12 @@ class _ModeBar extends StatelessWidget {
           decoration: BoxDecoration(
             border: Border(
               top: BorderSide(
-                width: 3,
-                color: selected ? context.tokens.text : const Color(0x00000000),
+                width: t.tabBarWidth,
+                color: selected ? t.text : const Color(0x00000000),
               ),
             ),
           ),
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.titleMedium!.copyWith(
-              fontWeight: selected ? FontWeight.w500 : FontWeight.w400,
-              color: selected ? context.tokens.text : context.tokens.muted,
-            ),
-          ),
+          child: text,
         ),
       ),
     );

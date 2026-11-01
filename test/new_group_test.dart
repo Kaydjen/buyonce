@@ -91,7 +91,9 @@ void main() {
     expect(find.text('Send 7'), findsOneWidget);
   });
 
-  testWidgets('marking a new product in Shop keeps its author line', (tester) async {
+  testWidgets('marking a new product in Shop keeps its author line', (
+    tester,
+  ) async {
     await pumpApp(tester);
     await annaAddsThree(tester);
     await goShop(tester);

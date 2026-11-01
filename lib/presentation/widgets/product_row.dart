@@ -41,13 +41,24 @@ class ProductRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.tokens;
     final taken = mark != RowMark.none;
+    // An inset row leaves room for its rounded tint; its height stays [minHeight].
+    final gap = t.inset > 0 ? 2.0 : 0.0;
     final content = Container(
-      constraints: BoxConstraints(minHeight: minHeight),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      constraints: BoxConstraints(minHeight: minHeight - 2 * gap),
+      padding: EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: context.tokens.rowPad,
+      ),
       decoration: BoxDecoration(
         border: showDivider
-            ? Border(top: BorderSide(color: context.tokens.line))
+            ? Border(
+                top: BorderSide(
+                  color: context.tokens.line,
+                  width: context.tokens.lineWidth,
+                ),
+              )
             : null,
       ),
       child: Row(
@@ -104,27 +115,38 @@ class ProductRow extends StatelessWidget {
         ],
       ),
     );
-    return Material(
-      color: taken ? context.tokens.tint : context.tokens.surface,
-      child: InkWell(
-        onTap: onTap,
-        child: needed && !taken
-            ? Stack(
-                children: [
-                  content,
-                  Positioned(
-                    left: 0,
-                    top: 0,
-                    bottom: 0,
-                    child: Container(
-                      key: const Key('needMark'),
-                      width: 4,
-                      color: context.tokens.needMark,
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: t.inset, vertical: gap),
+      child: Material(
+        // A card that paints its own surface leaves untaken rows clear.
+        color: taken
+            ? t.tint
+            : t.lift != null
+            ? const Color(0x00000000)
+            : t.surface,
+        borderRadius: BorderRadius.circular(t.radiusRow),
+        clipBehavior: t.radiusRow > 0 ? Clip.antiAlias : Clip.none,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(t.radiusRow),
+          onTap: onTap,
+          child: needed && !taken
+              ? Stack(
+                  children: [
+                    content,
+                    Positioned(
+                      left: 0,
+                      top: 0,
+                      bottom: 0,
+                      child: Container(
+                        key: const Key('needMark'),
+                        width: context.tokens.barWidth,
+                        color: context.tokens.needMark,
+                      ),
                     ),
-                  ),
-                ],
-              )
-            : content,
+                  ],
+                )
+              : content,
+        ),
       ),
     );
   }

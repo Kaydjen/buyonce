@@ -8,6 +8,7 @@ import '../view_models/groups/groups_view_model.dart';
 import '../view_models/session/session.dart';
 import '../view_models/users/user_names_view_model.dart';
 import '../widgets/group_dialogs.dart';
+import '../widgets/panel.dart';
 import '../widgets/section_label.dart';
 
 /// One group: members, invite code, mute, leave and (for the owner) rename, remove
@@ -49,50 +50,65 @@ class GroupScreen extends ConsumerWidget {
         ),
         children: [
           const SectionLabel('Members'),
-          for (final id in group.memberIds)
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(ref.watch(userNameProvider(id))),
-              subtitle: Text(
-                [
-                  if (id == group.ownerId) 'Owner',
-                  if (id == userId) 'You',
-                ].join(' · '),
-                style: TextStyle(color: context.tokens.muted),
-              ),
-              trailing: owner && id != group.ownerId
-                  ? TextButton(
-                      key: Key('remove-$id'),
-                      onPressed: () => _remove(context, ref, vm, group, id),
-                      child: const Text('Remove'),
-                    )
-                  : null,
+          Panel(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              children: [
+                for (final id in group.memberIds)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(ref.watch(userNameProvider(id))),
+                    subtitle: Text(
+                      [
+                        if (id == group.ownerId) 'Owner',
+                        if (id == userId) 'You',
+                      ].join(' · '),
+                      style: TextStyle(color: context.tokens.muted),
+                    ),
+                    trailing: owner && id != group.ownerId
+                        ? TextButton(
+                            key: Key('remove-$id'),
+                            onPressed: () =>
+                                _remove(context, ref, vm, group, id),
+                            child: const Text('Remove'),
+                          )
+                        : null,
+                  ),
+              ],
             ),
+          ),
           const SizedBox(height: 16),
           const SectionLabel('Invite code'),
-          Row(
-            children: [
-              Text(
-                group.inviteCode,
-                key: const Key('inviteCode'),
-                style: Theme.of(context).textTheme.headlineSmall!
-                    .copyWith(letterSpacing: 4),
-              ),
-              const Spacer(),
-              IconButton(
-                key: const Key('copyCode'),
-                onPressed: () => _copy(context, group.inviteCode),
-                icon: const Icon(Icons.copy),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          SwitchListTile(
-            key: const Key('muteGroup'),
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Mute notifications'),
-            value: group.mutedUserIds.contains(userId),
-            onChanged: (muted) => vm.setMuted(group.id, muted),
+          Panel(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      group.inviteCode,
+                      key: const Key('inviteCode'),
+                      style: Theme.of(context).textTheme.headlineSmall!
+                          .copyWith(letterSpacing: 4),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      key: const Key('copyCode'),
+                      onPressed: () => _copy(context, group.inviteCode),
+                      icon: const Icon(Icons.copy),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  key: const Key('muteGroup'),
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Mute notifications'),
+                  value: group.mutedUserIds.contains(userId),
+                  onChanged: (muted) => vm.setMuted(group.id, muted),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
           TextButton(
