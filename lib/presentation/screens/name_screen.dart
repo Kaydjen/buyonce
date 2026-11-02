@@ -7,6 +7,9 @@ import '../../domain/models/user_profile.dart';
 import '../view_models/account/account_view_model.dart';
 import '../view_models/session/session.dart';
 import '../view_models/users/user_names_view_model.dart';
+import '../widgets/accent_button.dart';
+import '../widgets/inset.dart';
+import '../widgets/toast.dart';
 
 /// Shown once after the first sign-in: the name other members see, prefilled from the
 /// Google profile.
@@ -50,11 +53,7 @@ class _NameScreenState extends ConsumerState<NameScreen> {
         ref.read(namePendingProvider.notifier).set(false);
       case Failure():
         setState(() => _busy = false);
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            const SnackBar(content: Text('Enter 1-10 characters')),
-          );
+        showToast(context, 'Enter 1-10 characters');
     }
   }
 
@@ -68,21 +67,28 @@ class _NameScreenState extends ConsumerState<NameScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              TextField(
-                key: const Key('nameField'),
-                controller: _text,
-                autofocus: true,
-                maxLength: maxDisplayNameLength,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(hintText: 'Name'),
-                onChanged: (_) => setState(() {}),
-                onSubmitted: (_) => _submit(),
+              SoftField(
+                child: TextField(
+                  key: const Key('nameField'),
+                  controller: _text,
+                  autofocus: true,
+                  maxLength: maxDisplayNameLength,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: const InputDecoration(
+                    hintText: 'Name',
+                    counterText: '',
+                  ),
+                  onChanged: (_) => setState(() {}),
+                  onSubmitted: (_) => _submit(),
+                ),
               ),
-              const SizedBox(height: 16),
-              FilledButton(
-                key: const Key('nameContinue'),
-                onPressed: _valid && !_busy ? _submit : null,
-                child: const Text('Continue'),
+              const SizedBox(height: 24),
+              Center(
+                child: AccentButton(
+                  buttonKey: const Key('nameContinue'),
+                  onPressed: _valid && !_busy ? _submit : null,
+                  label: 'Continue',
+                ),
               ),
             ],
           ),

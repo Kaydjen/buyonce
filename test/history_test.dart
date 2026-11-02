@@ -116,7 +116,7 @@ void main() {
       await tester.pumpWidget(const ProviderScope(child: BuyOnceApp()));
       await tester.pumpAndSettle();
       await openHistory(tester);
-      expect(find.text('YESTERDAY'), findsOneWidget);
+      expect(find.text('Yesterday'), findsOneWidget);
       // Seed trips alternate between me and the partner (Anna), five days back.
       expect(find.textContaining(RegExp(r'^Anna  \d\d:\d\d$')), findsWidgets);
       expect(find.textContaining(RegExp(r'^\d\d:\d\d$')), findsWidgets);
@@ -134,7 +134,7 @@ void main() {
     await tester.tap(find.text('Milk'));
     await tester.pumpAndSettle();
     await openHistory(tester);
-    expect(find.text('TODAY'), findsOneWidget);
+    expect(find.text('Today'), findsOneWidget);
     expect(find.text('Milk'), findsWidgets);
   });
 

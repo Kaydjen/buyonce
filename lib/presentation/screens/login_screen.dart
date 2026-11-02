@@ -4,7 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/models/account.dart';
 import '../view_models/account/account_view_model.dart';
+import '../../core/theme/app_tokens.dart';
+import '../widgets/accent_button.dart';
+import '../widgets/plain_button.dart';
 import '../widgets/sign_in_prompt.dart';
+import '../widgets/card_sheet.dart';
 
 /// Shown at the start until the user signs in or continues without an account (local
 /// mode: the personal list only). A cancelled sign-in returns here silently, a failed
@@ -30,27 +34,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   /// Debug only: choose what the next fake sign-in does.
   Future<void> _debugOutcome() async {
     final vm = ref.read(accountViewModelProvider.notifier);
-    final picked = await showModalBottomSheet<DebugSignInOutcome>(
-      context: context,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final o in DebugSignInOutcome.values)
-              ListTile(
-                key: Key('outcome-${o.name}'),
-                title: Text(switch (o) {
-                  DebugSignInOutcome.success => 'Success',
-                  DebugSignInOutcome.cancel => 'Cancel',
-                  DebugSignInOutcome.error => 'Error',
-                }),
-                trailing: o == vm.debugNextSignIn
-                    ? const Icon(Icons.check)
-                    : null,
-                onTap: () => Navigator.of(context).pop(o),
-              ),
-          ],
-        ),
+    final picked = await showCardSheet<DebugSignInOutcome>(
+      context,
+      builder: (context) => SheetCard(
+        children: [
+          for (final o in DebugSignInOutcome.values)
+            ListTile(
+              key: Key('outcome-${o.name}'),
+              title: Text(switch (o) {
+                DebugSignInOutcome.success => 'Success',
+                DebugSignInOutcome.cancel => 'Cancel',
+                DebugSignInOutcome.error => 'Error',
+              }),
+              trailing: o == vm.debugNextSignIn
+                  ? const Icon(Icons.check)
+                  : null,
+              onTap: () => Navigator.of(context).pop(o),
+            ),
+        ],
       ),
     );
     if (picked != null) vm.debugNextSignIn = picked;
@@ -62,23 +63,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       body: Center(
         child: _busy
             ? const CircularProgressIndicator(key: Key('signInProgress'))
-            : Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  FilledButton(
-                    key: const Key('signIn'),
-                    onPressed: _signIn,
-                    onLongPress: kDebugMode ? _debugOutcome : null,
-                    child: const Text('Sign in with Google'),
+            : ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 480),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: context.tokens.gutter,
                   ),
-                  const SizedBox(height: 8),
-                  TextButton(
-                    key: const Key('continueLocal'),
-                    onPressed: () =>
-                        ref.read(localModeProvider.notifier).set(true),
-                    child: const Text('Continue without account'),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      AccentButton(
+                        buttonKey: const Key('signIn'),
+                        onPressed: _signIn,
+                        onLongPress: kDebugMode ? _debugOutcome : null,
+                        label: 'Sign in with Google',
+                      ),
+                      const SizedBox(height: 20),
+                      PlainButton(
+                        key: const Key('continueLocal'),
+                        onPressed: () =>
+                            ref.read(localModeProvider.notifier).set(true),
+                        label: 'Continue without account',
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
       ),
     );

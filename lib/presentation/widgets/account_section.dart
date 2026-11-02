@@ -9,8 +9,12 @@ import '../../domain/models/user_profile.dart';
 import '../view_models/account/account_view_model.dart';
 import '../view_models/session/session.dart';
 import '../view_models/users/user_names_view_model.dart';
+import 'accent_button.dart';
+import 'card_dialog.dart';
+import 'groove.dart';
 import 'group_dialogs.dart';
 import 'sign_in_prompt.dart';
+import 'toast.dart';
 
 /// Settings > Account: the display name other members see, the Google sign-in, sign
 /// out and delete account.
@@ -35,10 +39,13 @@ class AccountSection extends ConsumerWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          FilledButton(
-            key: const Key('accountSignIn'),
-            onPressed: () => _signIn(context, ref),
-            child: const Text('Sign in with Google'),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: AccentButton(
+              buttonKey: const Key('accountSignIn'),
+              onPressed: () => _signIn(context, ref),
+              label: 'Sign in with Google',
+            ),
           ),
           if (kDebugMode) _debugLoginButton(context, ref),
         ],
@@ -60,12 +67,14 @@ class AccountSection extends ConsumerWidget {
           title: const Text('Google account'),
           subtitle: Text(signedIn.email, style: muted),
         ),
+        const Groove(),
         TextButton(
           key: const Key('signOut'),
           style: _flush,
           onPressed: () => _signOut(context, ref),
           child: const Text('Sign out'),
         ),
+        const Groove(),
         TextButton(
           key: const Key('deleteAccount'),
           style: _flush,
@@ -91,8 +100,8 @@ class AccountSection extends ConsumerWidget {
   );
 
   Future<void> _editName(BuildContext context, WidgetRef ref, String me) =>
-      showDialog<void>(
-        context: context,
+      showCardDialog<void>(
+        context,
         builder: (_) => PromptDialog(
           title: 'Name',
           hint: 'Name',
@@ -110,11 +119,12 @@ class AccountSection extends ConsumerWidget {
 
   /// Signed out, the app is a personal list; Settings closes to show it.
   Future<void> _signOut(BuildContext context, WidgetRef ref) async {
+    // The section rebuilds as signed out, so this context may be gone after the await.
+    final navigator = Navigator.of(context);
     final result = await ref.read(accountViewModelProvider.notifier).signOut();
-    if (!context.mounted) return;
     if (result is Ok<void>) {
-      Navigator.of(context).popUntil((route) => route.isFirst);
-    } else {
+      navigator.popUntil((route) => route.isFirst);
+    } else if (context.mounted) {
       _say(context, 'Failed to sign out');
     }
   }
@@ -122,8 +132,9 @@ class AccountSection extends ConsumerWidget {
   /// Settings closes after a sign-in: a new user lands on the name screen, others on
   /// the list with their groups.
   Future<void> _signIn(BuildContext context, WidgetRef ref) async {
-    if (await signInWithFeedback(context, ref) && context.mounted) {
-      Navigator.of(context).popUntil((route) => route.isFirst);
+    final navigator = Navigator.of(context);
+    if (await signInWithFeedback(context, ref)) {
+      navigator.popUntil((route) => route.isFirst);
     }
   }
 
@@ -136,21 +147,20 @@ class AccountSection extends ConsumerWidget {
       keep: 'Keep account',
     );
     if (!sure || !context.mounted) return;
+    final navigator = Navigator.of(context);
     final result = await ref
         .read(accountViewModelProvider.notifier)
         .deleteAccount();
-    if (!context.mounted) return;
     switch (result) {
       case Ok():
-        Navigator.of(context).popUntil((route) => route.isFirst);
-      case Failure(error: AccountError.reauthFailed):
+        navigator.popUntil((route) => route.isFirst);
+      case Failure(error: AccountError.reauthFailed) when context.mounted:
         _say(context, "Couldn't confirm. Try again.");
-      case Failure():
+      case Failure() when context.mounted:
         _say(context, 'Failed to delete the account');
+      case Failure():
     }
   }
 
-  void _say(BuildContext context, String text) => ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(text)));
+  void _say(BuildContext context, String text) => showToast(context, text);
 }

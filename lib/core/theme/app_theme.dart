@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
 
 import 'app_tokens.dart';
-import 'palette.dart';
 import 'style_variant.dart';
 
 /// The only place that maps tokens to `ThemeData`.
 abstract final class AppTheme {
-  static ThemeData dark([StyleVariant variant = StyleVariant.vaulto]) =>
-      build(variant.shape(Palette.colours(variant, Brightness.dark)));
+  static ThemeData dark([StyleVariant variant = StyleVariant.d7]) =>
+      build(variant.tokens(Brightness.dark));
 
-  static ThemeData light([StyleVariant variant = StyleVariant.vaulto]) =>
-      build(variant.shape(Palette.colours(variant, Brightness.light)));
+  static ThemeData light([StyleVariant variant = StyleVariant.d7]) =>
+      build(variant.tokens(Brightness.light));
 
   static ThemeData build(AppTokens t) {
     final scheme =
@@ -30,6 +29,7 @@ abstract final class AppTheme {
     // Material default sizes, written out because the unlocalized default theme has
     // none. The owner found 18 sp too large (2026-10-31).
     var text = base.textTheme.copyWith(
+      titleLarge: base.textTheme.titleLarge?.copyWith(fontSize: t.headingSize),
       titleMedium: base.textTheme.titleMedium?.copyWith(fontSize: 16),
       bodyLarge: base.textTheme.bodyLarge?.copyWith(fontSize: 16),
       bodyMedium: base.textTheme.bodyMedium?.copyWith(fontSize: 14),
@@ -42,15 +42,35 @@ abstract final class AppTheme {
       extensions: [t],
       textTheme: text,
       dividerTheme: DividerThemeData(color: t.line, thickness: t.lineWidth),
+      // The bar keeps the page colour when the content scrolls under it.
+      appBarTheme: AppBarTheme(
+        backgroundColor: t.background,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: const Color(0x00000000),
+      ),
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
+          // Soft styles: no outline; the chosen segment is a raised pill (the track is
+          // pressed, see SoftSegments).
           side: WidgetStatePropertyAll(
-            BorderSide(color: t.line, width: t.lineWidth),
+            t.depth > 0
+                ? BorderSide.none
+                : BorderSide(color: t.line, width: t.lineWidth),
           ),
           foregroundColor: WidgetStatePropertyAll(t.text),
+          shape: t.depth > 0
+              ? const WidgetStatePropertyAll(StadiumBorder())
+              : null,
+          elevation: WidgetStatePropertyAll(t.depth > 0 ? 3 : 0),
+          shadowColor: WidgetStatePropertyAll(t.shadowDark ?? t.line),
           backgroundColor: WidgetStateProperty.resolveWith(
             (states) => states.contains(WidgetState.selected)
-                ? t.tint
+                ? (t.depth > 0
+                      ? Color.alphaBlend(
+                          (t.shadowLight ?? t.surface).withValues(alpha: 0.75),
+                          t.surface,
+                        )
+                      : t.tint)
                 : const Color(0x00000000),
           ),
         ),
@@ -66,12 +86,27 @@ abstract final class AppTheme {
         ),
       ),
       scaffoldBackgroundColor: t.background,
+      // Press feedback: no Material ripple. The pressed shape fades to a quiet tint and
+      // back, clipped to the control (pills, the card).
+      splashFactory: NoSplash.splashFactory,
+      splashColor: const Color(0x00000000),
+      hoverColor: const Color(0x00000000),
+      highlightColor: t.text.withValues(alpha: 0.07),
+      listTileTheme: ListTileThemeData(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(t.radiusButton),
+        ),
+      ),
       popupMenuTheme: PopupMenuThemeData(
         color: t.lift ?? t.surface,
         shape: _shape(t, t.radiusCard),
       ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: t.lift ?? t.surface,
+        modalElevation: 0,
+        showDragHandle: true,
+        dragHandleColor: t.line,
+        dragHandleSize: const Size(40, 4),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(
             top: Radius.circular(t.radiusCard),
@@ -82,6 +117,7 @@ abstract final class AppTheme {
         backgroundColor: t.lift ?? t.surface,
         shape: _shape(t, t.radiusCard),
       ),
+      // The pill is drawn by showToast; this only keeps stray snackbars in the style.
       snackBarTheme: SnackBarThemeData(
         shape: _shape(t, t.radiusField.clamp(0, 20)),
         backgroundColor: t.tint,
@@ -124,15 +160,20 @@ abstract final class AppTheme {
     TextStyle? title(TextStyle? s) => s == null
         ? null
         : t.weighted(
-            s.copyWith(fontFamily: t.fontFamily, letterSpacing: t.titleSpacing),
+            s.copyWith(
+              fontFamily: t.displayFamily ?? t.fontFamily,
+              letterSpacing: t.titleSpacing,
+            ),
             t.titleWeight,
           );
-    TextStyle? body(TextStyle? s) => s == null
+    TextStyle? body(TextStyle? s, [FontWeight? weight]) => s == null
         ? null
         : t.weighted(
             s.copyWith(fontFamily: t.fontFamily, letterSpacing: t.bodySpacing),
-            t.bodyWeight,
+            weight ?? t.bodyWeight,
           );
+    TextStyle? control(TextStyle? s) =>
+        s == null || t.displayOnControls ? title(s) : body(s, t.titleWeight);
     return x.copyWith(
       displayLarge: body(x.displayLarge),
       displayMedium: body(x.displayMedium),
@@ -146,9 +187,9 @@ abstract final class AppTheme {
       bodyLarge: body(x.bodyLarge),
       bodyMedium: body(x.bodyMedium),
       bodySmall: body(x.bodySmall),
-      labelLarge: title(x.labelLarge),
-      labelMedium: title(x.labelMedium),
-      labelSmall: title(x.labelSmall),
+      labelLarge: control(x.labelLarge),
+      labelMedium: control(x.labelMedium),
+      labelSmall: control(x.labelSmall),
     );
   }
 }

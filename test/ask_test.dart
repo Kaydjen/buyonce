@@ -33,7 +33,7 @@ void main() {
 
     await tester.tap(askButton);
     await tester.pumpAndSettle();
-    expect(find.text('Notified: 2'), findsOneWidget);
+    expect(find.text('Notified 2'), findsOneWidget);
     expect(askButton.hitTestable(), findsNothing);
 
     await switchTo(tester, 'Anna');

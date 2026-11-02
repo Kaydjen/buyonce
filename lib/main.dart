@@ -9,6 +9,9 @@ import 'presentation/view_models/settings/settings_view_model.dart';
 import 'presentation/screens/app_gate.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  // The page runs under the system bars; the screens keep their own safe areas.
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   runApp(const ProviderScope(child: BuyOnceApp()));
 }
 
@@ -39,9 +42,22 @@ class BuyOnceApp extends ConsumerWidget {
               : MediaQuery.of(context)
                     .copyWith(textScaler: TextScaler.linear(factor)),
           child: AnnotatedRegion<SystemUiOverlayStyle>(
-            value: Theme.of(context).brightness == Brightness.dark
-                ? SystemUiOverlayStyle.light
-                : SystemUiOverlayStyle.dark,
+            // The bars are transparent, so the page runs under them to the edges.
+            value:
+                (Theme.of(context).brightness == Brightness.dark
+                        ? SystemUiOverlayStyle.light
+                        : SystemUiOverlayStyle.dark)
+                    .copyWith(
+                      statusBarColor: const Color(0x00000000),
+                      systemStatusBarContrastEnforced: false,
+                      systemNavigationBarColor: const Color(0x00000000),
+                      systemNavigationBarDividerColor: const Color(0x00000000),
+                      systemNavigationBarIconBrightness:
+                          Theme.of(context).brightness == Brightness.dark
+                          ? Brightness.light
+                          : Brightness.dark,
+                      systemNavigationBarContrastEnforced: false,
+                    ),
             child: child!,
           ),
         );

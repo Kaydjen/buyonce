@@ -3,7 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/utils/result.dart';
 import '../../domain/models/group.dart';
+import '../../core/theme/app_tokens.dart';
 import '../view_models/groups/groups_view_model.dart';
+import 'card_dialog.dart';
+import 'inset.dart';
+import 'plain_button.dart';
 
 /// A one-field dialog. [onSubmit] returns an error text to show under the field, or
 /// null when it worked; the dialog closes only then.
@@ -59,36 +63,56 @@ class _PromptDialogState extends State<PromptDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.title),
-      content: TextField(
-        controller: _text,
-        autofocus: true,
-        maxLength: widget.maxLength,
-        textCapitalization: widget.capitals
-            ? TextCapitalization.characters
-            : TextCapitalization.sentences,
-        decoration: InputDecoration(hintText: widget.hint, errorText: _error),
-        onChanged: (_) => setState(() => _error = null),
-        onSubmitted: (_) => _submit(),
+    final t = context.tokens;
+    return CardDialog(
+      title: widget.title,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SoftField(
+            child: TextField(
+              controller: _text,
+              autofocus: true,
+              maxLength: widget.maxLength,
+              textCapitalization: widget.capitals
+                  ? TextCapitalization.characters
+                  : TextCapitalization.sentences,
+              decoration: InputDecoration(
+                hintText: widget.hint,
+                counterText: '',
+              ),
+              onChanged: (_) => setState(() => _error = null),
+              onSubmitted: (_) => _submit(),
+            ),
+          ),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: Text(
+                _error!,
+                style: Theme.of(context).textTheme.bodySmall!
+                    .copyWith(color: t.text),
+              ),
+            ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          onPressed: _text.text.trim().isEmpty ? null : _submit,
-          child: Text(widget.confirm),
-        ),
-      ],
+      cancel: PlainButton(
+        label: 'Cancel',
+        onPressed: () => Navigator.of(context).pop(),
+      ),
+      confirm: PlainButton(
+        raised: true,
+        label: widget.confirm,
+        onPressed: _text.text.trim().isEmpty ? null : _submit,
+      ),
     );
   }
 }
 
 Future<void> showCreateGroupDialog(BuildContext context, WidgetRef ref) =>
-    showDialog<void>(
-      context: context,
+    showCardDialog<void>(
+      context,
       builder: (_) => PromptDialog(
         title: 'New group',
         hint: 'Group name',
@@ -103,8 +127,8 @@ Future<void> showCreateGroupDialog(BuildContext context, WidgetRef ref) =>
     );
 
 Future<void> showJoinGroupDialog(BuildContext context, WidgetRef ref) =>
-    showDialog<void>(
-      context: context,
+    showCardDialog<void>(
+      context,
       builder: (_) => PromptDialog(
         title: 'Join group',
         hint: 'Code',
@@ -123,8 +147,8 @@ Future<void> showRenameGroupDialog(
   BuildContext context,
   WidgetRef ref,
   Group group,
-) => showDialog<void>(
-  context: context,
+) => showCardDialog<void>(
+  context,
   builder: (_) => PromptDialog(
     title: 'Rename group',
     hint: 'Group name',
@@ -147,21 +171,24 @@ Future<bool> confirmAction(
   required String confirm,
   required String keep,
 }) async =>
-    await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(body),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(keep),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(confirm),
-          ),
-        ],
+    await showCardDialog<bool>(
+      context,
+      builder: (context) => CardDialog(
+        title: title,
+        content: Text(
+          body,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        cancel: PlainButton(
+          label: keep,
+          onPressed: () => Navigator.of(context).pop(false),
+        ),
+        confirm: PlainButton(
+          raised: true,
+          label: confirm,
+          onPressed: () => Navigator.of(context).pop(true),
+        ),
       ),
     ) ??
     false;

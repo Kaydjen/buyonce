@@ -42,7 +42,7 @@ void main() {
     await pumpApp(tester);
     await annaAddsThree(tester);
 
-    expect(find.text('NEW · ANNA'), findsOneWidget);
+    expect(find.text('New · Anna'), findsOneWidget);
     for (final name in ['Pears', 'Plums', 'Honey']) {
       expect(inNew(name), findsOneWidget);
     }
@@ -61,7 +61,7 @@ void main() {
     await goShop(tester);
 
     expect(find.byKey(const Key('newGroup')), findsNothing);
-    expect(find.text('NEW · ANNA'), findsNothing);
+    expect(find.text('New · Anna'), findsNothing);
     for (final name in ['Pears', 'Plums', 'Honey']) {
       expect(inToBuy(name), findsOneWidget);
       expect(
@@ -116,7 +116,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('newGroup')), findsNothing);
-    expect(find.text('NEW · ANNA'), findsNothing);
+    expect(find.text('New · Anna'), findsNothing);
     expect(rowNamed('Pears'), findsOneWidget);
   });
 

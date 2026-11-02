@@ -4,12 +4,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../domain/models/plan.dart';
 import '../view_models/list/list_view_model.dart';
-import 'section_label.dart';
+import 'card_sheet.dart';
+import 'groove.dart';
+import 'panel.dart';
+import 'titled_card.dart';
+import 'toast.dart';
 
 Future<void> showPlansSheet(BuildContext context) {
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
+  return showCardSheet<void>(
+    context,
+    fromTop: true,
     builder: (context) => const PlansSheet(),
   );
 }
@@ -73,13 +77,11 @@ class _PlansSheetState extends ConsumerState<PlansSheet> {
         child: InkWell(
           onTap: () async {
             // The marks land all over the catalog, so the count tells what happened.
-            final messenger = ScaffoldMessenger.of(context);
+            final page = Navigator.of(context).context;
             Navigator.of(context).pop();
             final added = await vm.applyPlan(plan);
-            if (added == 0) return;
-            messenger
-              ..hideCurrentSnackBar()
-              ..showSnackBar(SnackBar(content: Text('Added: $added')));
+            if (added == 0 || !page.mounted) return;
+            showToast(page, 'Added: $added');
           },
           child: Padding(
             padding: const EdgeInsets.only(left: 16),
@@ -96,6 +98,7 @@ class _PlansSheetState extends ConsumerState<PlansSheet> {
                   ),
                 ),
                 IconButton(
+                  tooltip: plan.pinned ? 'Unpin' : 'Pin',
                   onPressed: () => vm.togglePinned(plan),
                   icon: Icon(
                     plan.pinned ? Icons.push_pin : Icons.push_pin_outlined,
@@ -106,6 +109,7 @@ class _PlansSheetState extends ConsumerState<PlansSheet> {
                 ),
                 IconButton(
                   key: Key('delete-${plan.id}'),
+                  tooltip: 'Delete',
                   onPressed: () => _delete(plan),
                   icon: Icon(Icons.delete_outline, color: context.tokens.muted),
                 ),
@@ -116,43 +120,55 @@ class _PlansSheetState extends ConsumerState<PlansSheet> {
       );
     }
 
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 0, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (pinned.isNotEmpty) ...[
-              const SectionLabel('Templates'),
-              for (final plan in pinned) row(plan),
-            ],
-            if (recent.isNotEmpty) ...[
-              const SectionLabel('Recent'),
-              for (final plan in recent) row(plan),
-            ],
-            if (_undo != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8, right: 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Deleted',
-                        style: Theme.of(context).textTheme.bodyMedium!
-                            .copyWith(color: context.tokens.muted),
-                      ),
-                    ),
-                    TextButton(
-                      key: const Key('undoDelete'),
-                      onPressed: _restore,
-                      child: const Text('Undo'),
-                    ),
-                  ],
-                ),
+    Widget plansCard(String title, List<Plan> list) => TitledCard(
+      title: title,
+      child: Column(
+        children: [
+          for (var i = 0; i < list.length; i++) ...[
+            if (i > 0)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: Groove(tight: true),
               ),
+            row(list[i]),
           ],
-        ),
+        ],
       ),
+    );
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (pinned.isNotEmpty) ...[
+          plansCard('Templates', pinned),
+          const SizedBox(height: 16),
+        ],
+        if (recent.isNotEmpty) ...[
+          plansCard('Recent', recent),
+          const SizedBox(height: 16),
+        ],
+        if (_undo != null)
+          Panel(
+            tinted: true,
+            padding: const EdgeInsets.only(left: 16, right: 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Deleted',
+                    style: Theme.of(context).textTheme.bodyMedium!
+                        .copyWith(color: context.tokens.muted),
+                  ),
+                ),
+                TextButton(
+                  key: const Key('undoDelete'),
+                  onPressed: _restore,
+                  child: const Text('Undo'),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }

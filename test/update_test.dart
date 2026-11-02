@@ -40,7 +40,7 @@ Future<void> openSettings(WidgetTester tester) async {
   await tester.tap(find.text('Settings'));
   await tester.pumpAndSettle();
   // The Version section is at the bottom of the list.
-  await tester.drag(find.byType(ListView), const Offset(0, -2000));
+  await tester.drag(find.byType(SingleChildScrollView), const Offset(0, -2000));
   await tester.pumpAndSettle();
 }
 

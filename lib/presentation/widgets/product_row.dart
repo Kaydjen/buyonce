@@ -43,16 +43,18 @@ class ProductRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = context.tokens;
     final taken = mark != RowMark.none;
-    // An inset row leaves room for its rounded tint; its height stays [minHeight].
+    // A row with a rounded tint leaves room for it; its height stays [minHeight].
     final gap = t.inset > 0 ? 2.0 : 0.0;
-    final content = Container(
+    final plain = Container(
       constraints: BoxConstraints(minHeight: minHeight - 2 * gap),
-      padding: EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: context.tokens.rowPad,
+      padding: EdgeInsets.only(
+        left: t.needDot ? 32 : 16,
+        right: 16,
+        top: context.tokens.rowPad,
+        bottom: context.tokens.rowPad,
       ),
       decoration: BoxDecoration(
-        border: showDivider
+        border: showDivider && t.depth == 0
             ? Border(
                 top: BorderSide(
                   color: context.tokens.line,
@@ -70,7 +72,12 @@ class ProductRow extends StatelessWidget {
                 Text(
                   name,
                   style: Theme.of(context).textTheme.bodyLarge!.copyWith(
-                    color: taken ? context.tokens.muted : context.tokens.text,
+                    color: taken
+                        ? t.muted
+                        // A product to buy in Plan is a little dimmer than the others.
+                        : needed
+                        ? Color.lerp(t.text, t.muted, 0.4)
+                        : t.text,
                   ),
                 ),
                 if (addedBy.isNotEmpty)
@@ -80,9 +87,7 @@ class ProductRow extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall!.copyWith(
-                      color: taken
-                          ? context.tokens.muted
-                          : context.tokens.accent,
+                      color: taken || !t.accentAsText ? t.muted : t.ink,
                     ),
                   ),
               ],
@@ -115,39 +120,74 @@ class ProductRow extends StatelessWidget {
         ],
       ),
     );
+    // Soft styles: a groove (dark line over a light one) instead of a hairline.
+    final content = showDivider && t.depth > 0
+        ? Stack(
+            children: [
+              plain,
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: IgnorePointer(
+                  child: Column(
+                    children: [
+                      Container(height: 1, color: t.line),
+                      Container(height: 1, color: t.shadowLight),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          )
+        : plain;
+    final tile = Material(
+      // A card that paints its own surface leaves untaken rows clear.
+      color: taken && t.depth == 0
+          ? t.tint
+          : t.lift != null || t.depth > 0
+          ? const Color(0x00000000)
+          : t.surface,
+      borderRadius: BorderRadius.circular(t.radiusRow),
+      clipBehavior: t.radiusRow > 0 ? Clip.antiAlias : Clip.none,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(t.radiusRow),
+        onTap: onTap,
+        child: needed && !taken
+            ? Stack(
+                children: [
+                  content,
+                  Positioned(
+                    left: t.needDot ? 12 : 0,
+                    top: 0,
+                    bottom: 0,
+                    child: t.needDot
+                        ? Center(
+                            child: Container(
+                              key: const Key('needMark'),
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                // Grey, not the accent: every needed product has one.
+                                color: t.muted.withValues(alpha: 0.75),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          )
+                        : Container(
+                            key: const Key('needMark'),
+                            width: t.barWidth,
+                            color: t.needMark,
+                          ),
+                  ),
+                ],
+              )
+            : content,
+      ),
+    );
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: t.inset, vertical: gap),
-      child: Material(
-        // A card that paints its own surface leaves untaken rows clear.
-        color: taken
-            ? t.tint
-            : t.lift != null
-            ? const Color(0x00000000)
-            : t.surface,
-        borderRadius: BorderRadius.circular(t.radiusRow),
-        clipBehavior: t.radiusRow > 0 ? Clip.antiAlias : Clip.none,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(t.radiusRow),
-          onTap: onTap,
-          child: needed && !taken
-              ? Stack(
-                  children: [
-                    content,
-                    Positioned(
-                      left: 0,
-                      top: 0,
-                      bottom: 0,
-                      child: Container(
-                        key: const Key('needMark'),
-                        width: context.tokens.barWidth,
-                        color: context.tokens.needMark,
-                      ),
-                    ),
-                  ],
-                )
-              : content,
-        ),
-      ),
+      child: tile,
     );
   }
 }

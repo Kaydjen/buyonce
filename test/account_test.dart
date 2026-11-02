@@ -16,6 +16,7 @@ import 'package:buyonce/presentation/view_models/users/user_names_view_model.dar
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:buyonce/presentation/widgets/card_dialog.dart';
 
 Future<ProviderContainer> pumpApp(
   WidgetTester tester, {
@@ -62,7 +63,7 @@ Future<void> tapKey(WidgetTester tester, String key) async {
 
 Future<void> tapDialog(WidgetTester tester, String text) async {
   await tester.tap(
-    find.descendant(of: find.byType(AlertDialog), matching: find.text(text)),
+    find.descendant(of: find.byType(CardDialog), matching: find.text(text)),
   );
   await tester.pumpAndSettle();
 }
@@ -92,7 +93,7 @@ void main() {
     await openSettings(tester);
     await tapKey(tester, 'accountName');
     final field = find.descendant(
-      of: find.byType(AlertDialog),
+      of: find.byType(CardDialog),
       matching: find.byType(TextField),
     );
     // The field refuses an eleventh character.
@@ -120,6 +121,10 @@ void main() {
     final container = await pumpApp(tester);
     await openSettings(tester);
     await tapKey(tester, 'signOut');
+    // The fake service answers after a delay; with no splash nothing else keeps frames
+    // coming while it runs.
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
     // Back on the list, no login screen.
     expect(find.byKey(const Key('menuButton')), findsOneWidget);
     expect(find.byKey(const Key('signIn')), findsNothing);
@@ -131,6 +136,8 @@ void main() {
     expect(find.byKey(const Key('signOut')), findsNothing);
     expect(find.byKey(const Key('deleteAccount')), findsNothing);
     await tapKey(tester, 'accountSignIn');
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
     expect(find.byKey(const Key('nameField')), findsNothing);
     expect(find.byKey(const Key('menuButton')), findsOneWidget);
     expect(container.read(userNameProvider('me')), 'Alex');

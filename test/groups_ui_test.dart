@@ -10,6 +10,7 @@ import 'package:buyonce/presentation/widgets/product_row.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:buyonce/presentation/widgets/card_dialog.dart';
 
 /// [seed] false starts like a release build: no groups, the first-run screen.
 Future<void> pumpApp(WidgetTester tester, {bool seed = true}) async {
@@ -42,14 +43,14 @@ Finder rowNamed(String name) =>
     find.descendant(of: find.byType(ProductRow), matching: find.text(name));
 
 final dialogField = find.descendant(
-  of: find.byType(AlertDialog),
+  of: find.byType(CardDialog),
   matching: find.byType(TextField),
 );
 
 /// A button of the open dialog; the same words may sit on the screen behind it.
 Future<void> tapDialog(WidgetTester tester, String text) async {
   await tester.tap(
-    find.descendant(of: find.byType(AlertDialog), matching: find.text(text)),
+    find.descendant(of: find.byType(CardDialog), matching: find.text(text)),
   );
   await tester.pumpAndSettle();
 }
@@ -93,6 +94,8 @@ void main() {
     // Add a product on Plan, mark it on Shop, close the trip.
     await tester.tap(find.byKey(const Key('tabPlan')));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('findButton')));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('addField')), 'Tea');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
@@ -130,7 +133,7 @@ void main() {
     await tester.pumpAndSettle();
     await tapDialog(tester, 'Join');
     expect(find.text('No group with this code'), findsOneWidget);
-    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.byType(CardDialog), findsOneWidget);
   });
 
   testWidgets('personal list: a right code joins, any case, personal stays', (
@@ -166,6 +169,8 @@ void main() {
   ) async {
     await pumpApp(tester, seed: false);
     await tester.tap(find.byKey(const Key('tabPlan')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('findButton')));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('addField')), 'Tea');
     await tester.testTextInput.receiveAction(TextInputAction.done);

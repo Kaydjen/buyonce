@@ -63,6 +63,12 @@ flutter:
     - family: Inter
       fonts:
         - asset: assets/fonts/Inter-VF.ttf
+    - family: Montserrat
+      fonts:
+        - asset: assets/fonts/Montserrat-VF.ttf
+    - family: Oswald
+      fonts:
+        - asset: assets/fonts/Oswald-VF.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:

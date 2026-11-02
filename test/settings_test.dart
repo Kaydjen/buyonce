@@ -26,7 +26,7 @@ void main() {
       const saved = AppSettings(
         autoSendEnabled: false,
         autoSendSeconds: 900,
-        theme: ThemeChoice.light,
+        theme: ThemeChoice.dark,
       );
       expect(await repo().save(saved), isA<Ok<void>>());
       final result = await repo().load();
@@ -77,11 +77,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('60 min'), findsOneWidget);
       for (final section in [
-        'AUTO-SEND',
-        'THEME',
-        'TEXT SIZE',
-        'ACCOUNT',
-        'VERSION',
+        'Sending',
+        'Theme',
+        'Text size',
+        'Account',
+        'About',
       ]) {
         await tester.scrollUntilVisible(find.text(section), 100);
         expect(find.text(section), findsOneWidget);

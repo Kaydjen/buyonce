@@ -11,11 +11,19 @@ class Panel extends StatelessWidget {
     required this.child,
     this.padding = EdgeInsets.zero,
     this.tinted = false,
+    this.radius,
+    this.shadow = true,
   });
 
   final Widget child;
   final EdgeInsetsGeometry padding;
   final bool tinted;
+
+  /// Corner radius; the card radius when null.
+  final double? radius;
+
+  /// A raised look in the soft styles; off when a parent already draws the shadow.
+  final bool shadow;
 
   @override
   Widget build(BuildContext context) {
@@ -33,7 +41,8 @@ class Panel extends StatelessWidget {
                 end: Alignment.bottomRight,
                 colors: [lift, t.surface],
               ),
-        borderRadius: BorderRadius.circular(t.radiusCard),
+        borderRadius: BorderRadius.circular(radius ?? t.radiusCard),
+        boxShadow: tinted || !shadow ? null : t.raised(),
         border: t.cardOutline
             ? Border.all(color: t.line, width: t.lineWidth)
             : null,

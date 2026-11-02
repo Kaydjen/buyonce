@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/models/group.dart';
@@ -15,6 +17,7 @@ import '../view_models/list/list_view_model.dart';
 import '../view_models/update/update_view_model.dart';
 import '../view_models/users/user_names_view_model.dart';
 import '../widgets/debug_user_sheet.dart';
+import '../widgets/edge_fade.dart';
 import '../widgets/flash_on_add.dart';
 import '../widgets/group_dialogs.dart';
 import '../widgets/group_sheet.dart';
@@ -24,8 +27,19 @@ import 'group_screen.dart';
 import 'history_screen.dart';
 import 'settings_screen.dart';
 import '../widgets/notice_banner.dart';
-import '../widgets/section_label.dart';
+import '../widgets/accent_dot.dart';
+import '../widgets/card_action.dart';
+import '../widgets/card_menu.dart';
+import '../widgets/toast.dart';
+import '../widgets/card_title.dart';
+import '../widgets/header_bar.dart';
+import '../widgets/mode_bar.dart';
+import '../widgets/inset.dart';
 import '../widgets/panel.dart';
+import '../widgets/plain_button.dart';
+import '../widgets/raised_icon.dart';
+import '../widgets/send_button.dart';
+import '../widgets/top_bar.dart';
 import '../widgets/product_row.dart';
 import '../widgets/plans_sheet.dart';
 import '../widgets/sign_in_prompt.dart';
@@ -39,11 +53,58 @@ class ListScreen extends ConsumerStatefulWidget {
 }
 
 class _ListScreenState extends ConsumerState<ListScreen>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   final _search = TextEditingController();
   final _searchFocus = FocusNode();
   final _scroll = ScrollController();
   final _frequentKey = GlobalKey();
+  final _selectKey = GlobalKey();
+
+  final _barKey = GlobalKey();
+  final _stackKey = GlobalKey();
+  final _statusKey = GlobalKey();
+  final _findKey = GlobalKey();
+
+  /// Where the card button sits in its card: distance from the right edge and from the
+  /// top, as last measured (the field replaces the button while a search is open).
+  Offset _homeInCard = const Offset(29, 28);
+
+  /// The plate the icon starts from (the card button).
+  static const _plate = 38.0;
+
+  /// How far the icon has glided from the card to the bar slot, 0..1. It runs on its own
+  /// spring once the icon leaves the card, so it always arrives, however far the list is
+  /// scrolled; a faster scroll starts it faster.
+  late final AnimationController _glide = AnimationController.unbounded(
+    vsync: this,
+  );
+  bool _docked = false;
+
+  /// The icon is drawn by the overlay: the button in the card is hidden meanwhile.
+  final _overlayOn = ValueNotifier<bool>(false);
+
+  /// Last measured position of the card button, for a card that is not built.
+  Offset? _lastHome;
+
+  /// Scroll speed in dp/s, from the last two offsets that differed.
+  double _scrollSpeed = 0;
+  double _prevOffset = 0;
+  final _clock = Stopwatch()..start();
+  Duration _prevAt = Duration.zero;
+
+  /// The docked search icon would cover the "N to buy" status (a narrow phone or large
+  /// text): the status gives way. Changes only when it flips.
+  final _hideStatus = ValueNotifier<bool>(false);
+
+  /// Global right edge of the status while it was last shown.
+  double _statusRight = 0;
+
+  /// Plan: the search field is open in the list card. Shop keeps this in the view model.
+  bool _planFind = false;
+
+  /// The confirmation shown on the Send / Notify button for a moment after it.
+  ({bool ask, String text})? _sent;
+  Timer? _sentTimer;
   double _lastKeyboardInset = 0;
   DateTime? _pausedAt;
 
@@ -55,6 +116,131 @@ class _ListScreenState extends ConsumerState<ListScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _scroll.addListener(_updateDock);
+    _glide.addListener(_updateDock);
+  }
+
+  /// The laid-out box of a keyed widget, or null when it is not built, not laid out yet
+  /// or being removed (a key can outlive its element for a frame).
+  RenderBox? _boxOf(GlobalKey key) {
+    try {
+      final box = key.currentContext?.findRenderObject();
+      return box is RenderBox && box.attached && box.hasSize ? box : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Where the search icon would be on its card and where the bar slot is (global),
+  /// and how far the card button is past the top edge of the list ([away] > 0: its plate
+  /// starts to be cut). Null while not measurable (first frame, no list yet).
+  ({double away, Offset home, Offset slot})? _measure() {
+    final s = ref.read(listViewModelProvider).value;
+    final bar = _boxOf(_barKey);
+    final list = _scroll.hasClients
+        ? _scroll.position.context.storageContext.findRenderObject()
+        : null;
+    if (s == null || bar == null || list is! RenderBox || !list.hasSize) {
+      return null;
+    }
+    final t = context.tokens;
+    final shop = s.mode == ListMode.buy;
+    final iconWidth = t.depth > 0 ? 52.0 : 48.0;
+    final barBox = bar.localToGlobal(Offset.zero) & bar.size;
+    final slot = Offset(
+      barBox.right - 4 - iconWidth * (shop ? 1 : 2) - iconWidth / 2,
+      barBox.center.dy,
+    );
+    final listTop = list.localToGlobal(Offset.zero).dy;
+    final card = _boxOf(shop ? _frequentKey : _selectKey);
+    if (card == null) {
+      // A card that is not built is far above the list once the list is scrolled.
+      return _scroll.offset > 0
+          ? (away: 1000, home: _lastHome ?? slot, slot: slot)
+          : null;
+    }
+    // The card top from the live scroll offset, not from the last layout, which is one
+    // frame behind while the list moves.
+    double reveal;
+    try {
+      reveal = RenderAbstractViewport.of(card)
+          .getOffsetToReveal(card, 0)
+          .offset;
+    } catch (_) {
+      // The list has not been laid out yet (the first frame of a new list).
+      return null;
+    }
+    final cardTop = Offset(
+      card.localToGlobal(Offset.zero).dx,
+      listTop + reveal - _scroll.offset,
+    );
+    final button = _boxOf(_findKey);
+    if (button != null) {
+      final centre = button.localToGlobal(button.size.center(Offset.zero));
+      final top = card.localToGlobal(Offset.zero);
+      _homeInCard = Offset(
+        top.dx + card.size.width - centre.dx,
+        centre.dy - top.dy,
+      );
+    }
+    final home = Offset(
+      cardTop.dx + card.size.width - _homeInCard.dx,
+      cardTop.dy + _homeInCard.dy,
+    );
+    // Where the icon leaves the card: the card itself may be far above (a fast scroll),
+    // but the glide starts at the top edge of the list, never off the screen.
+    final edge = listTop + _plate / 2;
+    final start = Offset(home.dx, home.dy < edge ? edge : home.dy);
+    _lastHome = start;
+    return (away: edge - home.dy, home: start, slot: slot);
+  }
+
+  /// The mode the dock state was last set for; a change snaps instead of gliding.
+  ListMode? _dockMode;
+
+  /// Starts the glide when the icon leaves the card or comes back to it, and keeps the
+  /// status out from under the docked icon; see [_hideStatus].
+  void _updateDock() {
+    if (!mounted) return;
+    final status = _boxOf(_statusKey);
+    if (status != null && !_hideStatus.value) {
+      _statusRight = status.localToGlobal(Offset(status.size.width, 0)).dx;
+    }
+    if (_scroll.hasClients && _scroll.offset != _prevOffset) {
+      final dt = (_clock.elapsed - _prevAt).inMicroseconds / 1e6;
+      if (dt > 0) _scrollSpeed = (_scroll.offset - _prevOffset).abs() / dt;
+      _prevOffset = _scroll.offset;
+      _prevAt = _clock.elapsed;
+    }
+    final m = _measure();
+    final want = m != null && m.away > 0;
+    final mode = ref.read(listViewModelProvider).value?.mode;
+    if (m != null && mode != _dockMode) {
+      // A tab switch is a new screen: the icon is where it belongs at once, it does not
+      // fly in from the place it had on the other tab.
+      _dockMode = mode;
+      _docked = want;
+      _glide.stop();
+      _glide.value = want ? 1 : 0;
+    } else if (want != _docked) {
+      _docked = want;
+      // A fast scroll sends the icon off faster; a slow one lets it settle gently.
+      final kick = (_scrollSpeed / 400).clamp(0.0, 6.0);
+      _glide.animateWith(
+        SpringSimulation(
+          SpringDescription.withDampingRatio(mass: 1, stiffness: 260, ratio: 1),
+          _glide.value,
+          want ? 1 : 0,
+          want ? kick : -kick,
+        ),
+      );
+    }
+    _overlayOn.value = m != null && (want || _glide.value > 0.001);
+    final iconWidth = context.tokens.depth > 0 ? 52.0 : 48.0;
+    _hideStatus.value =
+        m != null &&
+        (want || _glide.value > 0.5) &&
+        _statusRight > m.slot.dx - iconWidth / 2 - 4;
   }
 
   @override
@@ -86,9 +272,13 @@ class _ListScreenState extends ConsumerState<ListScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _sentTimer?.cancel();
     _searchFocus.dispose();
     _search.dispose();
     _scroll.dispose();
+    _glide.dispose();
+    _overlayOn.dispose();
+    _hideStatus.dispose();
     super.dispose();
   }
 
@@ -97,30 +287,111 @@ class _ListScreenState extends ConsumerState<ListScreen>
     ref.read(listViewModelProvider.notifier).setQuery('');
   }
 
-  /// The close icon of the field: Plan only clears it, Shop also hides it.
+  /// The close icon of the field: it clears the query and gives the card its title back.
   void _closeField(ListState s) {
     _search.clear();
     final vm = ref.read(listViewModelProvider.notifier);
-    s.mode == ListMode.buy ? vm.setFinding(false) : vm.setQuery('');
+    if (s.mode == ListMode.buy) {
+      vm.setFinding(false);
+    } else {
+      setState(() => _planFind = false);
+      vm.setQuery('');
+    }
   }
 
   /// The search icon of the Frequent card: the field replaces the title and the card
   /// scrolls to the top, so the keyboard never covers the results.
-  void _openFind() {
-    ref.read(listViewModelProvider.notifier).setFinding(true);
+  ///
+  /// [fromDock]: the icon in the top bar, used when the card is scrolled away. Plan then
+  /// scrolls to the card too (the "New" card may sit above it), and an open field only
+  /// gets the focus back.
+  void _openFind({bool fromDock = false}) {
+    final plan =
+        ref.read(listViewModelProvider).requireValue.mode == ListMode.need;
+    if (plan) {
+      setState(() => _planFind = true);
+    } else {
+      ref.read(listViewModelProvider.notifier).setFinding(true);
+    }
+    if (plan && !fromDock) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final card = _frequentKey.currentContext;
-      if (card == null) return;
-      Scrollable.ensureVisible(
-        card,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOutCubic,
-      );
+      final card = (plan ? _selectKey : _frequentKey).currentContext;
+      if (card != null) {
+        Scrollable.ensureVisible(
+          card,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOutCubic,
+        );
+      }
+      if (fromDock) _searchFocus.requestFocus();
     });
+  }
+
+  /// The search icon off its card: a plate that morphs from the flat tint button of the
+  /// card to the raised one of the bar as it glides (see [_flightState]).
+  Widget _dockOverlay() {
+    return Positioned.fill(
+      child: AnimatedBuilder(
+        animation: Listenable.merge([_scroll, _glide]),
+        builder: (context, _) {
+          final m = _measure();
+          final stack = _boxOf(_stackKey);
+          final g = _glide.value.clamp(0.0, 1.0);
+          if (m == null || stack == null || (m.away <= 0 && g <= 0.001)) {
+            return const SizedBox.shrink();
+          }
+          // The height follows the card until the icon has glided into the bar.
+          final at = stack.globalToLocal(Offset.lerp(m.home, m.slot, g)!);
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                left: at.dx - 24,
+                top: at.dy - 24,
+                width: 48,
+                height: 48,
+                child: _dockButton(g),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _dockButton(double p) {
+    final t = context.tokens;
+    final plate = t.depth > 0
+        ? DecoratedBox(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Color.lerp(t.tint, t.surface, p),
+              boxShadow: t.raised(0.6 * p),
+            ),
+            child: SizedBox.square(
+              dimension: _plate + (44 - _plate) * p,
+              child: Icon(
+                Icons.search,
+                size: 20 + 2 * p,
+                color: Color.lerp(t.muted, t.text, p),
+              ),
+            ),
+          )
+        : const Icon(Icons.search);
+    return Tooltip(
+      message: 'Search',
+      child: GestureDetector(
+        key: const Key('findDock'),
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _openFind(fromDock: true),
+        child: Center(child: plate),
+      ),
+    );
   }
 
   void _setMode(ListMode mode) {
     _search.clear();
+    _planFind = false;
     ref.read(listViewModelProvider.notifier).setMode(mode);
   }
 
@@ -164,9 +435,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
         curve: Curves.easeOutCubic,
       );
     }
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text('Added: $changed')));
+    showToast(context, 'Added: $changed');
   }
 
   /// Takes everything still open; the snackbar can take it back.
@@ -174,45 +443,50 @@ class _ListScreenState extends ConsumerState<ListScreen>
     final vm = ref.read(listViewModelProvider.notifier);
     final ids = await vm.markAll(card);
     if (!mounted || ids.isEmpty) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text('Marked: ${ids.length}'),
-          action: SnackBarAction(
-            label: 'Undo',
-            onPressed: () => vm.undoMarkAll(ids),
-          ),
-        ),
-      );
+    showToast(
+      context,
+      'Marked: ${ids.length}',
+      actionLabel: 'Undo',
+      onAction: () => vm.undoMarkAll(ids),
+    );
   }
 
   Future<void> _notify() async {
     Haptics.send(context);
     final count = await ref.read(listViewModelProvider.notifier).notify();
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text('Notified: $count')));
+    _confirmSent(
+      ask: false,
+      text: '${_isPersonal ? 'Done' : 'Sent'} $count',
+      count: count,
+    );
+  }
+
+  /// The button that was pressed says what happened for two seconds, then goes.
+  void _confirmSent({
+    required bool ask,
+    required String text,
+    required int count,
+  }) {
+    if (count == 0) return;
+    _sentTimer?.cancel();
+    setState(() => _sent = (ask: ask, text: text));
+    _sentTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _sent = null);
+    });
   }
 
   Future<void> _ask() async {
     Haptics.send(context);
     final count = await ref.read(listViewModelProvider.notifier).ask();
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text('Notified: $count')));
+    _confirmSent(ask: true, text: 'Notified $count', count: count);
   }
 
   /// A tap on a product that is already taken: a short note at the bottom, it goes
   /// away by itself and replaces an earlier one instead of piling up.
   void _hintTaken(String text) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(content: Text(text), duration: const Duration(seconds: 2)),
-      );
+    showToast(context, text, duration: const Duration(seconds: 2));
   }
 
   /// Debug builds only: long press on the group name switches the user.
@@ -265,19 +539,40 @@ class _ListScreenState extends ConsumerState<ListScreen>
   Widget build(BuildContext context) {
     final async = ref.watch(listViewModelProvider);
     final vm = ref.read(listViewModelProvider.notifier);
+    final float = context.tokens.floatTabs;
     return Scaffold(
-      body: SafeArea(
-        child: switch (async) {
-          AsyncData(:final value) => _content(value, vm),
-          AsyncError() => const Center(child: Text('Failed to load')),
-          _ => const Center(child: CircularProgressIndicator()),
-        },
+      body: Stack(
+        children: [
+          // The levitating switcher lets the list run under the bottom inset, so the
+          // shadows of the cards are not cut by a line above the system buttons.
+          SafeArea(
+            bottom: !float,
+            child: switch (async) {
+              AsyncData(:final value) => _content(value, vm),
+              AsyncError() => const Center(child: Text('Failed to load')),
+              _ => const Center(child: CircularProgressIndicator()),
+            },
+          ),
+          if (float && async.hasValue)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: ModeBar(mode: async.requireValue.mode, onSelect: _setMode),
+            ),
+        ],
       ),
+      // Above the levitating switcher when there is one.
       floatingActionButton: async.hasValue
-          ? _sendButton(async.requireValue)
+          ? Padding(
+              padding: EdgeInsets.only(
+                bottom: float ? context.tokens.floatLift : 0,
+              ),
+              child: _sendButton(async.requireValue),
+            )
           : null,
-      bottomNavigationBar: async.hasValue
-          ? _ModeBar(mode: async.requireValue.mode, onSelect: _setMode)
+      bottomNavigationBar: !float && async.hasValue
+          ? ModeBar(mode: async.requireValue.mode, onSelect: _setMode)
           : null,
     );
   }
@@ -336,17 +631,23 @@ class _ListScreenState extends ConsumerState<ListScreen>
   Widget _sendButton(ListState s) => Stack(
     alignment: Alignment.bottomRight,
     children: [
-      _SendButton(
+      SendButton(
         visible: s.mode == ListMode.buy && s.hasUnsent,
+        confirmed: s.mode == ListMode.buy && _sent?.ask == false
+            ? _sent!.text
+            : null,
         count: s.myMarkIds.length,
         autoSendAt: s.autoSendAt,
         onSend: _notify,
         label: _isPersonal ? 'Done' : 'Send',
       ),
-      _SendButton(
+      SendButton(
         buttonKey: const Key('askButton'),
         visible:
             s.mode == ListMode.need && s.askProducts.isNotEmpty && _hasPartners,
+        confirmed: s.mode == ListMode.need && _sent?.ask == true
+            ? _sent!.text
+            : null,
         count: s.askProducts.length,
         autoSendAt: null,
         onSend: _ask,
@@ -357,7 +658,20 @@ class _ListScreenState extends ConsumerState<ListScreen>
 
   Widget _content(ListState s, ListViewModel vm) {
     final shop = s.mode == ListMode.buy;
-    return Column(
+    // The layout may have moved the cards (a mode switch, a new group): measure again.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateDock());
+    return Stack(
+      key: _stackKey,
+      children: [_column(s, vm, shop), _dockOverlay()],
+    );
+  }
+
+  /// The top group (bar, banners) is laid out first and the list gets the rest, but the
+  /// group is the last child, so it paints over the list: the shadows of its buttons
+  /// fade out over the first rows instead of being cut at the bottom edge of the bar.
+  Widget _column(ListState s, ListViewModel vm, bool shop) {
+    final top = Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         if (kDebugMode && s.userId != groupUserIds.first)
           Container(
@@ -367,128 +681,212 @@ class _ListScreenState extends ConsumerState<ListScreen>
             alignment: Alignment.center,
             child: Text(
               ref.watch(userNameProvider(s.userId)),
-              style: TextStyle(fontSize: 12, color: context.tokens.muted),
+              style: Theme.of(context).textTheme.bodySmall!
+                  .copyWith(color: context.tokens.muted),
             ),
           ),
         _header(s),
         if (shop && s.othersTaken.isNotEmpty) _presence(s),
-        if (!shop)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-            child: _field(s, vm),
-          ),
         if (s.notices.isNotEmpty)
           NoticeBanner(lines: _noticeLines(s), onDismiss: vm.dismissNotices),
-        Expanded(
-          child: ListView(
-            controller: _scroll,
-            // Bottom room so the Send button never covers the last row; while
-            // searching, room to scroll the Frequent title to the top.
-            padding: EdgeInsets.fromLTRB(
-              16,
-              4,
-              16,
-              shop && s.finding ? MediaQuery.sizeOf(context).height * 0.6 : 136,
-            ),
-            children: [
-              if (shop) ...[
-                // Rows never move on a tap. What another member added since my last
-                // visit stays in place and shows the author under the name.
-                if (s.toBuy.isNotEmpty) ...[
-                  _card(
-                    key: const Key('toBuyCard'),
-                    title: _cardTitle(
-                      'To buy',
-                      trailing: _markAllButton(
-                        s,
-                        s.toBuy,
-                        const Key('markAll'),
+      ],
+    );
+    // The list fades into the page under the bar; the switcher has its own edge.
+    final list = EdgeFade(
+      bottom: false,
+      child: ListView(
+        controller: _scroll,
+        // Bottom room so the Send button never covers the last row; while
+        // searching, room to scroll the Frequent title to the top.
+        padding: EdgeInsets.fromLTRB(
+          context.tokens.gutter,
+          context.tokens.listTopPadding,
+          context.tokens.gutter,
+          (shop && s.finding ? MediaQuery.sizeOf(context).height * 0.6 : 136) +
+              MediaQuery.paddingOf(context).bottom,
+        ),
+        children: [
+          if (shop) ...[
+            // Rows never move on a tap. What another member added since my last
+            // visit stays in place and shows the author under the name.
+            if (s.toBuy.isNotEmpty) ...[
+              _card(
+                key: const Key('toBuyCard'),
+                title: CardTitle(
+                  'To buy',
+                  trailing: _markAllButton(s, s.toBuy, const Key('markAll')),
+                ),
+                body: _group(
+                  s,
+                  s.toBuy,
+                  vm,
+                  planned: true,
+                  divider: true,
+                  framed: false,
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+            KeyedSubtree(
+              key: const Key('frequentCard'),
+              child: _card(
+                key: _frequentKey,
+                title: s.finding
+                    ? Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                        child: _field(s, vm),
+                      )
+                    : CardTitle(
+                        'Frequent',
+                        trailing: KeyedSubtree(
+                          key: _findKey,
+                          child: ValueListenableBuilder<bool>(
+                            valueListenable: _overlayOn,
+                            builder: (context, on, button) =>
+                                Opacity(opacity: on ? 0 : 1, child: button),
+                            child: CardIconAction(
+                              key: const Key('findButton'),
+                              onPressed: _openFind,
+                              icon: Icons.search,
+                              label: 'Search',
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
-                    body: _group(
+                body: Column(
+                  key: const Key('frequentRows'),
+                  children: [
+                    if (s.canAdd)
+                      _addRow(s)
+                    else if (s.toBuy.isEmpty &&
+                        s.frequentShown.isEmpty &&
+                        !s.finding)
+                      _emptyRow(),
+                    for (var i = 0; i < s.frequentShown.length; i++)
+                      _row(
+                        s,
+                        s.frequentShown[i],
+                        vm,
+                        key: ValueKey(s.frequentShown[i].id),
+                        divider: true,
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ] else ...[
+            // Plan is one list: a needed product is marked in place. What another
+            // member added since my last visit sits on top as one "New" group.
+            if (s.newProducts.isNotEmpty) ...[
+              _newGroup(s, vm),
+              const SizedBox(height: 16),
+            ],
+            KeyedSubtree(
+              key: const Key('selectCard'),
+              child: _card(
+                key: _selectKey,
+                title: _planFind || s.searching
+                    ? Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                        child: _field(s, vm),
+                      )
+                    : CardTitle(
+                        'Select',
+                        trailing: KeyedSubtree(
+                          key: _findKey,
+                          child: ValueListenableBuilder<bool>(
+                            valueListenable: _overlayOn,
+                            builder: (context, on, button) =>
+                                Opacity(opacity: on ? 0 : 1, child: button),
+                            child: CardIconAction(
+                              key: const Key('findButton'),
+                              onPressed: _openFind,
+                              icon: Icons.search,
+                              label: 'Search',
+                            ),
+                          ),
+                        ),
+                      ),
+                body: Column(
+                  children: [
+                    if (s.canAdd)
+                      _addRow(s)
+                    else if (s.plainProducts.isEmpty &&
+                        !_planFind &&
+                        !s.searching)
+                      _emptyRow(),
+                    _group(
                       s,
-                      s.toBuy,
+                      s.searching ? s.visible : s.plainProducts,
                       vm,
-                      planned: true,
                       divider: true,
                       framed: false,
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                KeyedSubtree(
-                  key: const Key('frequentCard'),
-                  child: _card(
-                    key: _frequentKey,
-                    title: s.finding
-                        ? Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                            child: _field(s, vm),
-                          )
-                        : _cardTitle(
-                            'Frequent',
-                            trailing: IconButton(
-                              key: const Key('findButton'),
-                              onPressed: _openFind,
-                              icon: const Icon(Icons.search),
-                            ),
-                          ),
-                    body: Column(
-                      key: const Key('frequentRows'),
-                      children: [
-                        for (final p in s.frequentShown)
-                          _row(s, p, vm, key: ValueKey(p.id), divider: true),
-                      ],
-                    ),
-                  ),
+                  ],
                 ),
-              ] else ...[
-                // Plan is one list: a needed product is marked in place. What another
-                // member added since my last visit sits on top as one "New" group.
-                if (s.newProducts.isNotEmpty) ...[
-                  _newGroup(s, vm),
-                  const SizedBox(height: 16),
-                ],
-                if (s.searching
-                    ? s.visible.isNotEmpty
-                    : s.plainProducts.isNotEmpty)
-                  _group(s, s.searching ? s.visible : s.plainProducts, vm),
-              ],
-              if (s.canAdd)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: TextButton(
-                    onPressed: () => _add(s.query),
-                    child: Text('+ Add "${s.query.trim()}"'),
-                  ),
-                ),
-            ],
-          ),
-        ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+    return CustomMultiChildLayout(
+      delegate: _TopOverListLayout(),
+      children: [
+        LayoutId(id: _Slot.list, child: list),
+        LayoutId(id: _Slot.top, child: top),
       ],
     );
   }
 
-  /// The one search field: Plan keeps it above the list, Shop inside the Frequent card.
+  /// A card with no rows: one button to the "Add products" screen, no explanation.
+  Widget _emptyRow() => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+    child: SizedBox(
+      width: double.infinity,
+      child: PlainButton(
+        key: const Key('emptyAdd'),
+        label: 'Add products',
+        onPressed: _addProducts,
+      ),
+    ),
+  );
+
+  /// The first row of the card while the typed name matches nothing: adds it.
+  Widget _addRow(ListState s) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+    child: SizedBox(
+      width: double.infinity,
+      child: PlainButton(
+        key: const Key('addNew'),
+        label: 'Add "${s.query.trim()}"',
+        onPressed: () => _add(s.query),
+      ),
+    ),
+  );
+
+  /// The one search field: it takes the place of the title of the Select card in Plan
+  /// and of the Frequent card in Shop.
   Widget _field(ListState s, ListViewModel vm) {
     final shop = s.mode == ListMode.buy;
-    return TextField(
-      key: const Key('addField'),
-      controller: _search,
-      focusNode: _searchFocus,
-      autofocus: shop,
-      decoration: InputDecoration(
-        hintText: shop ? 'Find' : 'Search',
-        suffixIcon: s.query.isEmpty && !shop
-            ? null
-            : IconButton(
-                onPressed: () => _closeField(s),
-                icon: const Icon(Icons.close),
-              ),
+    return SoftField(
+      child: TextField(
+        key: const Key('addField'),
+        controller: _search,
+        focusNode: _searchFocus,
+        autofocus: true,
+        decoration: InputDecoration(
+          hintText: shop ? 'Find' : 'Search',
+          suffixIcon: IconButton(
+            tooltip: 'Close search',
+            onPressed: () => _closeField(s),
+            icon: const Icon(Icons.close),
+          ),
+        ),
+        textInputAction: TextInputAction.done,
+        onChanged: vm.setQuery,
+        onSubmitted: (_) => _submit(),
       ),
-      textInputAction: TextInputAction.done,
-      onChanged: vm.setQuery,
-      onSubmitted: (_) => _submit(),
     );
   }
 
@@ -504,45 +902,31 @@ class _ListScreenState extends ConsumerState<ListScreen>
   Widget _rounded({Key? key, required Widget child}) =>
       Panel(key: key, child: child);
 
-  Widget _cardTitle(String text, {Widget? trailing}) => SizedBox(
-    height: 56,
-    child: Stack(
-      alignment: Alignment.center,
-      children: [
-        Padding(
-          // Room for a button on the right; the title stays centred.
-          padding: EdgeInsets.symmetric(
-            horizontal: trailing == null ? 16 : 112,
-          ),
-          child: Text(
-            context.tokens.capsTitles ? text.toUpperCase() : text,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleMedium!
-                .copyWith(color: context.tokens.muted),
-          ),
-        ),
-        if (trailing != null)
-          Align(alignment: Alignment.centerRight, child: trailing),
-      ],
-    ),
-  );
-
   /// Who else is shopping now and how much they have taken.
   Widget _presence(ListState s) {
     final text = [
       for (final e in s.othersTaken.entries)
         '${ref.watch(userNameProvider(e.key))} shopping, ${e.value} taken',
     ].join(' · ');
-    return Container(
+    return Padding(
       key: const Key('presence'),
-      width: double.infinity,
-      color: context.tokens.tint,
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      child: Text(
-        text,
-        style: Theme.of(context).textTheme.bodyMedium!
-            .copyWith(color: context.tokens.muted),
+      padding: EdgeInsets.fromLTRB(
+        context.tokens.gutter,
+        0,
+        context.tokens.gutter,
+        8,
+      ),
+      child: Panel(
+        tinted: true,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: SizedBox(
+          width: double.infinity,
+          child: Text(
+            text,
+            style: Theme.of(context).textTheme.bodyMedium!
+                .copyWith(color: context.tokens.muted),
+          ),
+        ),
       ),
     );
   }
@@ -550,108 +934,87 @@ class _ListScreenState extends ConsumerState<ListScreen>
   /// The tint repeats the bottom tab, so the screen is never mistaken.
   Widget _header(ListState s) {
     final shop = s.mode == ListMode.buy;
-    final t = context.tokens;
-    return Container(
-      margin: t.pillTabs
-          ? EdgeInsets.symmetric(horizontal: t.inset, vertical: 4)
-          : null,
-      decoration: BoxDecoration(
-        color: shop ? t.tint : t.background,
-        borderRadius: t.pillTabs ? BorderRadius.circular(t.radiusCard) : null,
-      ),
-      padding: const EdgeInsets.only(left: 8, right: 4),
-      height: 56,
-      child: Row(
-        children: [
-          Expanded(
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                key: const Key('groupButton'),
-                onPressed: _switchGroup,
-                onLongPress: kDebugMode ? () => _debugUser(s.userId) : null,
-                style: TextButton.styleFrom(
-                  foregroundColor: context.tokens.muted,
-                ),
-                child: Text(
-                  ref
-                          .watch(groupsViewModelProvider)
-                          .value
-                          ?.where(
-                            (g) => g.id == ref.watch(activeGroupIdProvider),
-                          )
-                          .firstOrNull
-                          ?.name ??
-                      '',
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-            ),
-          ),
-          if (!shop && s.toBuyCount > 0)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Text(
-                '${s.toBuyCount} to buy',
-                key: const Key('toBuyCount'),
-                style: Theme.of(context).textTheme.bodyMedium!
-                    .copyWith(color: context.tokens.muted),
-              ),
-            ),
-          if (!shop)
-            TextButton(
-              key: const Key('addProducts'),
-              onPressed: _addProducts,
-              style: TextButton.styleFrom(
-                foregroundColor: context.tokens.muted,
-              ),
-              child: const Text('Add'),
-            ),
-          PopupMenuButton<String>(
-            key: const Key('menuButton'),
-            icon: _menuIcon(),
-            onSelected: (v) => switch (v) {
-              'sort' => _sort(),
-              'plans' => showPlansSheet(context),
-              'history' => Navigator.of(context).push<void>(
-                MaterialPageRoute(builder: (_) => const HistoryScreen()),
-              ),
-              _ => Navigator.of(context).push<void>(
-                MaterialPageRoute(builder: (_) => const SettingsScreen()),
-              ),
-            },
-            itemBuilder: (_) => [
-              if (!shop)
-                const PopupMenuItem(value: 'sort', child: Text('Sort')),
-              if (!shop && s.plans.isNotEmpty)
-                const PopupMenuItem(value: 'plans', child: Text('Templates')),
-              const PopupMenuItem(value: 'history', child: Text('History')),
-              PopupMenuItem(
-                value: 'settings',
-                child: Row(
-                  children: [
-                    const Text('Settings'),
-                    if (ref.read(updateViewModelProvider).hasUpdate) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        key: const Key('settingsUpdateDot'),
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: context.tokens.text,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
+    final menuLabel =
+        ref.watch(updateViewModelProvider.select((u) => u.hasUpdate))
+        ? 'Menu, update available'
+        : 'Menu';
+    final activeId = ref.watch(activeGroupIdProvider);
+    final name =
+        ref
+            .watch(groupsViewModelProvider)
+            .value
+            ?.where((g) => g.id == activeId)
+            .firstOrNull
+            ?.name ??
+        '';
+    return ValueListenableBuilder<bool>(
+      valueListenable: _hideStatus,
+      builder: (context, hide, _) => KeyedSubtree(
+        key: _barKey,
+        child: TopBar(
+          shop: shop,
+          name: name,
+          toBuyCount: shop ? 0 : s.toBuyCount,
+          statusKey: _statusKey,
+          hideStatus: hide,
+          onGroup: _switchGroup,
+          onGroupLongPress: kDebugMode ? () => _debugUser(s.userId) : null,
+          onAdd: shop ? null : _addProducts,
+          menu: _menu(s, menuLabel),
+        ),
       ),
     );
+  }
+
+  Widget _menu(ListState s, String menuLabel) => context.tokens.depth > 0
+      ? RaisedIcon(
+          key: const Key('menuButton'),
+          label: menuLabel,
+          onPressed: () => _openMenu(s),
+          child: _menuIcon(),
+        )
+      : IconButton(
+          key: const Key('menuButton'),
+          tooltip: menuLabel,
+          style: headerIconStyle(context),
+          onPressed: () => _openMenu(s),
+          icon: _menuIcon(),
+        );
+
+  /// The "⋮" menu: a small floating card at the top right.
+  Future<void> _openMenu(ListState s) async {
+    final shop = s.mode == ListMode.buy;
+    final picked = await showCardMenu<String>(
+      context,
+      items: [
+        if (!shop) const CardMenuItem('sort', 'Sort'),
+        if (!shop && s.plans.isNotEmpty)
+          const CardMenuItem('plans', 'Templates'),
+        const CardMenuItem('history', 'History'),
+        CardMenuItem(
+          'settings',
+          'Settings',
+          trailing: ref.read(updateViewModelProvider).hasUpdate
+              ? const AccentDot(key: Key('settingsUpdateDot'))
+              : null,
+        ),
+      ],
+    );
+    if (picked == null || !mounted) return;
+    switch (picked) {
+      case 'sort':
+        await _sort();
+      case 'plans':
+        await showPlansSheet(context);
+      case 'history':
+        await Navigator.of(
+          context,
+        ).push<void>(MaterialPageRoute(builder: (_) => const HistoryScreen()));
+      default:
+        await Navigator.of(
+          context,
+        ).push<void>(MaterialPageRoute(builder: (_) => const SettingsScreen()));
+    }
   }
 
   String _nameOf(String? userId) =>
@@ -670,10 +1033,10 @@ class _ListScreenState extends ConsumerState<ListScreen>
   Widget? _markAllButton(ListState s, List<Product> card, Key key) =>
       s.untakenOf(card).isEmpty
       ? null
-      : TextButton(
+      : CardTextAction(
           key: key,
           onPressed: () => _markAll(card),
-          child: const Text('Mark all'),
+          label: 'Mark all',
         );
 
   /// Plan: the "New" group, one label, then plain rows that are tapped in place; no
@@ -684,9 +1047,9 @@ class _ListScreenState extends ConsumerState<ListScreen>
       key: const Key('newGroup'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SectionLabel(_newLabel(s), color: context.tokens.accent),
-        _rounded(
-          child: Column(
+        _card(
+          title: CardTitle(_newLabel(s)),
+          body: Column(
             children: [
               for (var i = 0; i < fresh.length; i++)
                 _row(
@@ -694,7 +1057,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
                   fresh[i],
                   vm,
                   key: ValueKey(fresh[i].id),
-                  divider: i > 0,
+                  divider: true,
                 ),
             ],
           ),
@@ -786,236 +1149,27 @@ class _ListScreenState extends ConsumerState<ListScreen>
   }
 }
 
-/// Floating Send button with the count: the only accent of the screen. It slides in
-/// with my first unsent mark; above it the auto-send time.
-class _SendButton extends StatelessWidget {
-  const _SendButton({
-    this.buttonKey = const Key('sendButton'),
-    required this.visible,
-    required this.count,
-    required this.autoSendAt,
-    required this.onSend,
-    required this.label,
-  });
-  final Key buttonKey;
-  final bool visible;
-  final int count;
-  final DateTime? autoSendAt;
-  final VoidCallback onSend;
+enum _Slot { top, list }
 
-  /// "Send" in a group; "Done" in the personal list, where nobody is notified.
-  final String label;
+/// Top group first at its natural height, the list in the rest of the height below it.
+class _TopOverListLayout extends MultiChildLayoutDelegate {
+  _TopOverListLayout();
 
   @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      ignoring: !visible,
-      child: AnimatedSlide(
-        offset: visible ? Offset.zero : const Offset(0, 2),
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOutCubic,
-        child: AnimatedOpacity(
-          opacity: visible ? 1 : 0,
-          duration: const Duration(milliseconds: 200),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              if (autoSendAt != null) _AutoChip(at: autoSendAt!),
-              const SizedBox(height: 8),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(
-                    context.tokens.radiusButton,
-                  ),
-                  boxShadow: context.tokens.glow == 0
-                      ? null
-                      : [
-                          BoxShadow(
-                            color: context.tokens.accent.withValues(alpha: 0.4),
-                            blurRadius: context.tokens.glow,
-                          ),
-                        ],
-                ),
-                child: FilledButton(
-                  key: buttonKey,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: context.tokens.accent,
-                    foregroundColor: context.tokens.onAccent,
-                    minimumSize: const Size(0, 56),
-                    padding: const EdgeInsets.symmetric(horizontal: 28),
-                  ),
-                  onPressed: onSend,
-                  child: Text(
-                    '$label $count',
-                    style: Theme.of(context).textTheme.titleMedium!
-                        .copyWith(color: context.tokens.onAccent),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+  void performLayout(Size size) {
+    final top = layoutChild(
+      _Slot.top,
+      BoxConstraints.loose(Size(size.width, size.height))
+          .tighten(width: size.width),
     );
-  }
-}
-
-/// "Auto · 15:20", and "Auto · in 8 min" for the last ten minutes. It repeats the
-/// idle rule, so the user knows the list goes out by itself.
-class _AutoChip extends StatefulWidget {
-  const _AutoChip({required this.at});
-  final DateTime at;
-
-  @override
-  State<_AutoChip> createState() => _AutoChipState();
-}
-
-class _AutoChipState extends State<_AutoChip> {
-  late final Timer _tick;
-  String _shown = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _shown = _text;
-    _tick = Timer.periodic(const Duration(seconds: 1), (_) {
-      final text = _text;
-      if (text != _shown) setState(() => _shown = text);
-    });
+    positionChild(_Slot.top, Offset.zero);
+    layoutChild(
+      _Slot.list,
+      BoxConstraints.tight(Size(size.width, size.height - top.height)),
+    );
+    positionChild(_Slot.list, Offset(0, top.height));
   }
 
   @override
-  void dispose() {
-    _tick.cancel();
-    super.dispose();
-  }
-
-  String get _text {
-    final left = widget.at.difference(DateTime.now());
-    if (left < const Duration(minutes: 1)) {
-      return 'Auto · in ${left.inSeconds.clamp(1, 59)} s';
-    }
-    if (left <= const Duration(minutes: 10)) {
-      final minutes = (left.inSeconds / 60).ceil().clamp(1, 10);
-      return 'Auto · in $minutes min';
-    }
-    final t = widget.at.toLocal();
-    final hh = t.hour.toString().padLeft(2, '0');
-    final mm = t.minute.toString().padLeft(2, '0');
-    return 'Auto · $hh:$mm';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      key: const Key('autoChip'),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: context.tokens.tint,
-        borderRadius: BorderRadius.circular(context.tokens.radiusChip),
-      ),
-      child: Text(
-        _shown,
-        style: Theme.of(context).textTheme.bodySmall!
-            .copyWith(color: context.tokens.muted),
-      ),
-    );
-  }
-}
-
-/// Bottom two-tab switcher: text only, the selected tab is bold with a bar on top.
-class _ModeBar extends StatelessWidget {
-  const _ModeBar({required this.mode, required this.onSelect});
-  final ListMode mode;
-  final ValueChanged<ListMode> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = context.tokens;
-    final tabs = Row(
-      children: [
-        _tab(context, ListMode.need, 'Plan', const Key('tabPlan')),
-        _tab(context, ListMode.buy, 'Shop', const Key('tabShop')),
-      ],
-    );
-    if (!t.pillTabs) {
-      return Material(
-        color: t.surface,
-        child: SafeArea(top: false, child: tabs),
-      );
-    }
-    // A floating pill; the selected tab is a lighter pill inside it.
-    return Material(
-      color: t.background,
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(t.gutter, 4, t.gutter, 8),
-          child: Container(
-            height: 56,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [t.lift ?? t.surface, t.surface],
-              ),
-              borderRadius: BorderRadius.circular(t.radiusButton),
-              border: Border.all(color: t.line, width: t.lineWidth),
-            ),
-            child: tabs,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _tab(BuildContext context, ListMode m, String label, Key key) {
-    final t = context.tokens;
-    final selected = mode == m;
-    final text = Text(
-      label,
-      style: t.weighted(
-        Theme.of(context).textTheme.titleMedium!
-            .copyWith(color: selected ? t.text : t.muted),
-        selected ? t.titleWeight : t.bodyWeight,
-      ),
-    );
-    if (t.pillTabs) {
-      return Expanded(
-        child: Padding(
-          padding: const EdgeInsets.all(4),
-          child: Material(
-            color: selected ? t.tint : const Color(0x00000000),
-            borderRadius: BorderRadius.circular(t.radiusButton),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              key: key,
-              onTap: () => onSelect(m),
-              child: Center(child: text),
-            ),
-          ),
-        ),
-      );
-    }
-    return Expanded(
-      child: InkWell(
-        key: key,
-        onTap: () => onSelect(m),
-        child: Container(
-          height: 56,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(
-                width: t.tabBarWidth,
-                color: selected ? t.text : const Color(0x00000000),
-              ),
-            ),
-          ),
-          child: text,
-        ),
-      ),
-    );
-  }
+  bool shouldRelayout(_TopOverListLayout old) => false;
 }

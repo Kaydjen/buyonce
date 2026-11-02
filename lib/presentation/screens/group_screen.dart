@@ -8,8 +8,11 @@ import '../view_models/groups/groups_view_model.dart';
 import '../view_models/session/session.dart';
 import '../view_models/users/user_names_view_model.dart';
 import '../widgets/group_dialogs.dart';
-import '../widgets/panel.dart';
-import '../widgets/section_label.dart';
+import '../widgets/groove.dart';
+import '../widgets/soft_switch_tile.dart';
+import '../widgets/titled_card.dart';
+import '../widgets/edge_fade.dart';
+import '../widgets/toast.dart';
 
 /// One group: members, invite code, mute, leave and (for the owner) rename, remove
 /// members and delete.
@@ -41,88 +44,94 @@ class GroupScreen extends ConsumerWidget {
             ),
         ],
       ),
-      body: ListView(
-        padding: EdgeInsets.fromLTRB(
-          context.tokens.gutter,
-          8,
-          context.tokens.gutter,
-          24,
-        ),
-        children: [
-          const SectionLabel('Members'),
-          Panel(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
-              children: [
-                for (final id in group.memberIds)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(ref.watch(userNameProvider(id))),
-                    subtitle: Text(
-                      [
-                        if (id == group.ownerId) 'Owner',
-                        if (id == userId) 'You',
-                      ].join(' · '),
-                      style: TextStyle(color: context.tokens.muted),
-                    ),
-                    trailing: owner && id != group.ownerId
-                        ? TextButton(
-                            key: Key('remove-$id'),
-                            onPressed: () =>
-                                _remove(context, ref, vm, group, id),
-                            child: const Text('Remove'),
-                          )
-                        : null,
-                  ),
-              ],
-            ),
+      body: EdgeFade(
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(
+            context.tokens.gutter,
+            context.tokens.listTopPadding,
+            context.tokens.gutter,
+            24,
           ),
-          const SizedBox(height: 16),
-          const SectionLabel('Invite code'),
-          Panel(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      group.inviteCode,
-                      key: const Key('inviteCode'),
-                      style: Theme.of(context).textTheme.headlineSmall!
-                          .copyWith(letterSpacing: 4),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      key: const Key('copyCode'),
-                      onPressed: () => _copy(context, group.inviteCode),
-                      icon: const Icon(Icons.copy),
+          children: [
+            TitledCard(
+              title: 'Members',
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                children: [
+                  for (final id in group.memberIds) ...[
+                    if (id != group.memberIds.first) const Groove(),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(ref.watch(userNameProvider(id))),
+                      subtitle: id == group.ownerId || id == userId
+                          ? Text(
+                              [
+                                if (id == group.ownerId) 'Owner',
+                                if (id == userId) 'You',
+                              ].join(' · '),
+                              style: TextStyle(color: context.tokens.muted),
+                            )
+                          : null,
+                      trailing: owner && id != group.ownerId
+                          ? TextButton(
+                              key: Key('remove-$id'),
+                              onPressed: () =>
+                                  _remove(context, ref, vm, group, id),
+                              child: const Text('Remove'),
+                            )
+                          : null,
                     ),
                   ],
-                ),
-                const SizedBox(height: 8),
-                SwitchListTile(
-                  key: const Key('muteGroup'),
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Mute notifications'),
-                  value: group.mutedUserIds.contains(userId),
-                  onChanged: (muted) => vm.setMuted(group.id, muted),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          TextButton(
-            key: const Key('leaveGroup'),
-            onPressed: () => _leave(context, vm, group),
-            child: const Text('Leave group'),
-          ),
-          if (owner)
+            const SizedBox(height: 16),
+            TitledCard(
+              title: 'Invite code',
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        group.inviteCode,
+                        key: const Key('inviteCode'),
+                        style: Theme.of(context).textTheme.headlineSmall!
+                            .copyWith(letterSpacing: 4),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        key: const Key('copyCode'),
+                        tooltip: 'Copy code',
+                        onPressed: () => _copy(context, group.inviteCode),
+                        icon: const Icon(Icons.copy),
+                      ),
+                    ],
+                  ),
+                  const Groove(),
+                  SoftSwitchTile(
+                    key: const Key('muteGroup'),
+                    title: 'Mute notifications',
+                    value: group.mutedUserIds.contains(userId),
+                    onChanged: (muted) => vm.setMuted(group.id, muted),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
             TextButton(
-              key: const Key('deleteGroup'),
-              onPressed: () => _delete(context, vm, group),
-              child: const Text('Delete group'),
+              key: const Key('leaveGroup'),
+              onPressed: () => _leave(context, vm, group),
+              child: const Text('Leave group'),
             ),
-        ],
+            if (owner)
+              TextButton(
+                key: const Key('deleteGroup'),
+                onPressed: () => _delete(context, vm, group),
+                child: const Text('Delete group'),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -130,9 +139,7 @@ class GroupScreen extends ConsumerWidget {
   Future<void> _copy(BuildContext context, String code) async {
     await Clipboard.setData(ClipboardData(text: code));
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text('Code copied')));
+    showToast(context, 'Code copied');
   }
 
   Future<void> _remove(

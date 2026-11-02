@@ -1,40 +1,40 @@
 import 'package:flutter/material.dart';
 
 import 'app_tokens.dart';
+import 'styles/design1.dart';
+import 'styles/design2.dart';
+import 'styles/design3.dart';
+import 'styles/design4.dart';
+import 'styles/design5.dart';
+import 'styles/design6.dart';
+import 'styles/design7.dart';
 
-/// Style directions under trial. Colours of each variant live in `palette.dart`; this
-/// file holds the shape and type. Debug builds switch between them in Settings; the
-/// winner replaces the others.
+/// The designs, numbered in the order they were made; none is deleted, so an old one can
+/// be looked at again. A new design is a new file in `styles/` (colours, shapes and type
+/// together: the only place with raw values) and a new entry here. Debug builds switch
+/// between them in Settings.
 enum StyleVariant {
-  vaulto('Vaulto'),
-  base('Base');
+  d1('1'),
+  d2('2'),
+  d3('3'),
+  d4('4'),
+  d5('5'),
+  d6('6'),
+  d7('7');
 
   const StyleVariant(this.label);
   final String label;
 
-  /// [colours] with this variant's shape and type applied.
-  AppTokens shape(AppTokens colours) => switch (this) {
-    base => colours,
-    // Dark glass: rounded cards with a soft gradient and a hairline edge, pill
-    // controls, tight Inter, one orange accent.
-    vaulto => colours.copyWith(
-      radiusChip: 999,
-      radiusField: 999,
-      radiusCard: 24,
-      radiusRow: 16,
-      radiusButton: 999,
-      gutter: 16,
-      inset: 6,
-      rowPad: 8,
-      lineWidth: 1,
-      cardOutline: true,
-      pillTabs: true,
-      fontFamily: 'Inter',
-      titleWeight: FontWeight.w500,
-      bodyWeight: FontWeight.w400,
-      titleSpacing: -0.4,
-      bodySpacing: -0.1,
-      labelSpacing: 0.8,
-    ),
-  };
+  AppTokens tokens(Brightness brightness) {
+    final dark = brightness == Brightness.dark;
+    return switch (this) {
+      d1 => dark ? Design1.dark : Design1.light,
+      d2 => dark ? Design2.dark : Design2.light,
+      d3 => dark ? Design3.dark : Design3.light,
+      d4 => dark ? Design4.dark : Design4.light,
+      d5 => dark ? Design5.dark : Design5.light,
+      d6 => dark ? Design6.dark : Design6.light,
+      d7 => dark ? Design7.dark : Design7.light,
+    };
+  }
 }

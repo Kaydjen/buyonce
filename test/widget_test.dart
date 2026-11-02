@@ -42,13 +42,22 @@ Future<void> goPlan(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// Plan keeps the search field behind the icon of the Select card; opens it.
+Future<void> openPlanField(WidgetTester tester) async {
+  if (find.byKey(const Key('addField')).evaluate().isNotEmpty) return;
+  await tester.tap(find.byKey(const Key('findButton')));
+  await tester.pumpAndSettle();
+}
+
 /// Types into the Plan field without submitting.
 Future<void> typeInField(WidgetTester tester, String text) async {
+  await openPlanField(tester);
   await tester.enterText(find.byKey(const Key('addField')), text);
   await tester.pumpAndSettle();
 }
 
 Future<void> typeAndSubmit(WidgetTester tester, String text) async {
+  await openPlanField(tester);
   await tester.enterText(find.byKey(const Key('addField')), text);
   await tester.testTextInput.receiveAction(TextInputAction.done);
   await tester.pumpAndSettle();
@@ -65,13 +74,13 @@ Future<void> openMenu(WidgetTester tester, String item) async {
 String modeTitle(WidgetTester tester) {
   bool bold(String key) =>
       tester
-          .widget<Text>(
+          .widget<AnimatedDefaultTextStyle>(
             find.descendant(
               of: find.byKey(Key(key)),
-              matching: find.byType(Text),
+              matching: find.byType(AnimatedDefaultTextStyle),
             ),
           )
-          .style!
+          .style
           .fontWeight ==
       FontWeight.w500;
   return bold('tabShop') ? 'Shop' : 'Plan';
@@ -194,11 +203,14 @@ Future<void> switchGroup(WidgetTester tester, String name) async {
 }
 
 void main() {
-  testWidgets('opens in Plan with the whole catalog and the add field', (
+  testWidgets('opens in Plan with the whole catalog and the Select card', (
     tester,
   ) async {
     await pumpApp(tester);
     expect(modeTitle(tester), 'Plan');
+    expect(find.byKey(const Key('addField')), findsNothing);
+    expect(find.byKey(const Key('findButton')), findsOneWidget);
+    await openPlanField(tester);
     expect(find.byKey(const Key('addField')), findsOneWidget);
     expect(find.text('Search'), findsOneWidget);
     expect(find.text('LIST'), findsNothing);
@@ -566,6 +578,9 @@ void main() {
 
     await tester.tap(find.byKey(const Key('sendButton')));
     await tester.pumpAndSettle();
+    expect(find.textContaining('Sent'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
     expect(sendOpacity(tester), 0);
   });
 
@@ -625,7 +640,7 @@ void main() {
     expect(needIn('Bread'), findsNothing);
 
     await openMenu(tester, 'Templates');
-    expect(find.text('TEMPLATES'), findsOneWidget);
+    expect(find.text('Templates'), findsOneWidget);
     await tester.tap(find.text('Bread, Eggs, Cheese'));
     await tester.pumpAndSettle();
     expect(needIn('Bread'), findsOneWidget);
@@ -653,10 +668,10 @@ void main() {
     await pumpApp(tester);
     await typeInField(tester, 'Nuts');
     expect(rowNamed('Nuts'), findsNothing);
-    await tester.tap(find.text('+ Add "Nuts"'));
+    await tester.tap(find.text('Add "Nuts"'));
     await tester.pumpAndSettle();
     expect(rowNamed('Nuts'), findsOneWidget);
-    expect(find.text('+ Add "Nuts"'), findsNothing);
+    expect(find.text('Add "Nuts"'), findsNothing);
   });
 
   testWidgets('Enter on an existing name plans it, no duplicate', (
@@ -674,7 +689,7 @@ void main() {
     await pumpApp(tester);
     await typeAndSubmit(tester, 'er');
     expect(find.widgetWithText(TextField, 'er'), findsOneWidget);
-    expect(find.text('+ Add "er"'), findsNothing);
+    expect(find.text('Add "er"'), findsNothing);
   });
 
   // The test font is wider than Roboto, so this is stricter than the real phone.
@@ -724,6 +739,9 @@ void main() {
     await tester.tap(find.text('Buns'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('sendButton')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Sent'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
     expect(sendOpacity(tester), 0);
     expect(inToBuy('Buns'), findsNothing); // sent: no longer needed
@@ -912,13 +930,11 @@ void main() {
     expectBlinkAfterScroll(timeline);
   });
 
-  testWidgets('Plan: the blink of a new product starts after the scroll', (
+  testWidgets('Plan: a new product blinks once the list is on top', (
     tester,
   ) async {
     await pumpApp(tester);
-    await tester.drag(find.byType(ListView).first, const Offset(0, -2000));
-    await tester.pumpAndSettle();
-    expect(listPixels(tester), greaterThan(100));
+    await openPlanField(tester);
     await tester.enterText(find.byKey(const Key('addField')), 'Nuts');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     final timeline = await recordFlash(tester);

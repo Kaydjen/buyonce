@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:buyonce/core/theme/app_tokens.dart';
-import 'package:buyonce/core/theme/palette.dart';
 import 'package:buyonce/core/theme/style_variant.dart';
 import 'package:buyonce/domain/models/app_settings.dart';
 import 'package:buyonce/main.dart';
@@ -12,7 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-AppTokens _colours(Brightness b) => Palette.colours(StyleVariant.vaulto, b);
+AppTokens _colours(Brightness b) => defaultStyleVariant.tokens(b);
 
 Color scaffoldColor(WidgetTester tester) =>
     tester.widget<Scaffold>(find.byType(Scaffold).first).backgroundColor ??
@@ -29,9 +28,12 @@ void main() {
     ).listSync(recursive: true)) {
       if (file is! File || !file.path.endsWith('.dart')) continue;
       final text = file.readAsStringSync();
-      if (text.contains('palette.dart') ||
+      if (text.contains('theme/styles/') ||
           text.contains('AppColors') ||
-          RegExp(r'\bColors\.').hasMatch(text)) {
+          RegExp(r'\bColors\.').hasMatch(text) ||
+          // Shapes and type come from the style too, never from the screens.
+          RegExp(r'BorderRadius\.circular\(\s*[0-9]').hasMatch(text) ||
+          RegExp(r'fontSize:|fontWeight:').hasMatch(text)) {
         offenders.add(file.path);
       }
     }
@@ -73,6 +75,25 @@ void main() {
       await tester.pumpAndSettle();
     }
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a fresh install is Light even when the phone is dark', (
+    tester,
+  ) async {
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+    await tester.pumpWidget(const ProviderScope(child: BuyOnceApp()));
+    await tester.pumpAndSettle();
+    expect(scaffoldColor(tester), _colours(Brightness.light).background);
+    // System stays selectable: it follows the phone.
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(MaterialApp)),
+    );
+    await container
+        .read(settingsProvider.notifier)
+        .setTheme(ThemeChoice.system);
+    await tester.pumpAndSettle();
+    expect(scaffoldColor(tester), _colours(Brightness.dark).background);
   });
 
   testWidgets('the selector in Settings changes the theme', (tester) async {

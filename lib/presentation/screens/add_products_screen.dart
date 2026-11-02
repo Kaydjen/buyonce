@@ -5,6 +5,8 @@ import '../../core/theme/app_tokens.dart';
 import '../view_models/drafts/drafts_view_model.dart';
 import '../view_models/groups/groups_view_model.dart';
 import '../view_models/list/list_view_model.dart';
+import '../widgets/accent_button.dart';
+import '../widgets/inset.dart';
 
 /// Several products at once: Enter turns the typed name into a draft row and the
 /// keyboard stays; "Add N" makes the drafts needed. Pops with how many products changed.
@@ -65,14 +67,16 @@ class _AddProductsScreenState extends ConsumerState<AddProductsScreen> {
               context.tokens.gutter,
               8,
             ),
-            child: TextField(
-              key: const Key('draftField'),
-              controller: _field,
-              focusNode: _focus,
-              autofocus: true,
-              decoration: const InputDecoration(hintText: 'Name'),
-              textInputAction: TextInputAction.done,
-              onSubmitted: (_) => _submit(),
+            child: SoftField(
+              child: TextField(
+                key: const Key('draftField'),
+                controller: _field,
+                focusNode: _focus,
+                autofocus: true,
+                decoration: const InputDecoration(hintText: 'Name'),
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _submit(),
+              ),
             ),
           ),
           Expanded(
@@ -106,22 +110,10 @@ class _AddProductsScreenState extends ConsumerState<AddProductsScreen> {
             child: AnimatedOpacity(
               opacity: count == 0 ? 0 : 1,
               duration: const Duration(milliseconds: 200),
-              child: FilledButton(
-                key: const Key('addCommit'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: context.tokens.accent,
-                  foregroundColor: context.tokens.onAccent,
-                  minimumSize: const Size(0, 56),
-                  padding: const EdgeInsets.symmetric(horizontal: 28),
-                ),
+              child: AccentButton(
+                buttonKey: const Key('addCommit'),
+                label: 'Add $count',
                 onPressed: _commit,
-                child: Text(
-                  'Add $count',
-                  style: Theme.of(context).textTheme.titleMedium!.copyWith(
-                    fontWeight: FontWeight.w500,
-                    color: context.tokens.onAccent,
-                  ),
-                ),
               ),
             ),
           );
@@ -153,6 +145,7 @@ class _DraftRow extends StatelessWidget {
           ),
           IconButton(
             key: ValueKey('remove-$name'),
+            tooltip: 'Remove $name',
             onPressed: onRemove,
             icon: Icon(Icons.close, color: context.tokens.muted),
           ),

@@ -50,7 +50,8 @@ Future<void> tapText(WidgetTester tester, String text) async {
 }
 
 Future<void> closeTop(WidgetTester tester) async {
-  await tester.tapAt(const Offset(180, 20));
+  // The barrier is covered by a sheet from the top or from the bottom: pop it.
+  tester.state<NavigatorState>(find.byType(Navigator).first).pop();
   await tester.pumpAndSettle();
 }
 
