@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_tokens.dart';
 
-/// A text button in a card title ("Mark all"). A flat tint pill in the styles with card
+/// A text button in a card title ("Mark all"). A low raised pill in the styles with card
 /// buttons, a plain text button otherwise.
 class CardTextAction extends StatelessWidget {
   const CardTextAction({
@@ -20,15 +20,13 @@ class CardTextAction extends StatelessWidget {
     if (!t.cardButtons) {
       return TextButton(onPressed: onPressed, child: Text(label));
     }
-    // A flat tint without shadows: part of the card, quiet next to the product rows.
     return _Reach(
       onTap: onPressed,
       rightGap: 9,
-      child: Material(
-        color: t.tint,
-        borderRadius: BorderRadius.circular(t.radiusButton),
-        clipBehavior: Clip.antiAlias,
+      child: Ink(
+        decoration: _plateLook(t, BoxShape.rectangle),
         child: InkWell(
+          borderRadius: BorderRadius.circular(t.radiusButton),
           onTap: onPressed,
           child: ConstrainedBox(
             constraints: const BoxConstraints(minHeight: _plate),
@@ -51,6 +49,21 @@ class CardTextAction extends StatelessWidget {
 }
 
 const double _plate = 38;
+
+/// The plate of a card button: the gradient and the shadow of the header plates, but a
+/// much lower lift, so it sits in the card instead of standing out of it.
+BoxDecoration _plateLook(AppTokens t, BoxShape shape) => BoxDecoration(
+  shape: shape,
+  borderRadius: shape == BoxShape.circle
+      ? null
+      : BorderRadius.circular(t.radiusButton),
+  gradient: LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [t.sheen ?? t.surface, t.surface],
+  ),
+  boxShadow: t.raised(0.18),
+);
 
 /// Makes a 38 dp plate react in a 48 dp area: [_slack] more on each side, which still
 /// fits the 56 dp card title. The plate keeps its look and its ripple.
@@ -109,11 +122,10 @@ class CardIconAction extends StatelessWidget {
       rightGap: 5,
       child: Tooltip(
         message: label,
-        child: Material(
-          color: t.tint,
-          shape: const CircleBorder(),
-          clipBehavior: Clip.antiAlias,
+        child: Ink(
+          decoration: _plateLook(t, BoxShape.circle),
           child: InkWell(
+            customBorder: const CircleBorder(),
             onTap: onPressed,
             child: SizedBox(
               width: _plate,

@@ -28,35 +28,11 @@ class HeaderBar extends StatelessWidget {
   }
 }
 
-/// Style of a top bar text button: a tint plate in the styles that want buttons to look
-/// like buttons, plain muted text otherwise.
-ButtonStyle headerButtonStyle(BuildContext context) {
-  final t = context.tokens;
-  if (!t.plateButtons) return TextButton.styleFrom(foregroundColor: t.muted);
-  return TextButton.styleFrom(
-    foregroundColor: t.text,
-    backgroundColor: t.tint,
-    minimumSize: const Size(0, 40),
-    padding: const EdgeInsets.symmetric(horizontal: 16),
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(t.radiusButton),
-    ),
-  );
-}
+/// Style of a top bar text button: plain muted text.
+ButtonStyle headerButtonStyle(BuildContext context) =>
+    TextButton.styleFrom(foregroundColor: context.tokens.muted);
 
-/// Style of the round menu button of the top bar; the default one without plates.
-ButtonStyle? headerIconStyle(BuildContext context) {
-  final t = context.tokens;
-  if (!t.plateButtons) return null;
-  return IconButton.styleFrom(
-    backgroundColor: t.tint,
-    foregroundColor: t.text,
-    fixedSize: const Size(40, 40),
-  );
-}
-
-/// "4 to buy" in the top bar of Plan: a status, so never a plate. With plated buttons
-/// the number takes the accent.
+/// "4 to buy" in the top bar of Plan: a status, so never a plate.
 class HeaderStatus extends StatelessWidget {
   const HeaderStatus(this.count, {super.key});
 
@@ -65,31 +41,13 @@ class HeaderStatus extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.tokens;
-    final style = Theme.of(context).textTheme.bodyMedium!;
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: t.plateButtons ? 12 : 8),
-      child: t.plateButtons
-          ? Text.rich(
-              key: const Key('toBuyCount'),
-              TextSpan(
-                children: [
-                  TextSpan(
-                    text: '$count',
-                    style: t.weighted(
-                      style.copyWith(color: t.ink),
-                      t.titleWeight,
-                    ),
-                  ),
-                  TextSpan(text: ' to buy'),
-                ],
-              ),
-              style: style.copyWith(color: t.muted),
-            )
-          : Text(
-              '$count to buy',
-              key: const Key('toBuyCount'),
-              style: style.copyWith(color: t.muted),
-            ),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Text(
+        '$count to buy',
+        key: const Key('toBuyCount'),
+        style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: t.muted),
+      ),
     );
   }
 }

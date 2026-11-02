@@ -16,9 +16,7 @@ class AppTokens extends ThemeExtension<AppTokens> {
     required this.text,
     required this.muted,
     required this.accent,
-    required this.onAccent,
     required this.needMark,
-    this.lift,
     this.radiusChip = 16,
     this.radiusField = 12,
     this.radiusCard = 14,
@@ -32,11 +30,7 @@ class AppTokens extends ThemeExtension<AppTokens> {
     this.lineWidth = 1,
     this.barWidth = 4,
     this.tabBarWidth = 3,
-    this.cardOutline = false,
-    this.glow = 0,
-    this.accentFilled = true,
     this.floatTabs = false,
-    this.plateButtons = false,
     this.displayOnControls = true,
     this.bigHeader = false,
     this.compactTabs = false,
@@ -48,13 +42,15 @@ class AppTokens extends ThemeExtension<AppTokens> {
     this.cardButtons = false,
     this.shadowLight,
     this.shadowDark,
+    this.shadowLightScale = 1,
+    this.rim,
+    this.sheen,
     this.accentInk,
     this.statusInline = false,
     this.headingSize = 22,
     this.tabHeight = 36,
     this.captionSpacing,
     this.fontFamily,
-    this.displayFamily,
     this.titleWeight = FontWeight.w500,
     this.bodyWeight = FontWeight.w400,
     this.titleSpacing = 0,
@@ -75,13 +71,9 @@ class AppTokens extends ThemeExtension<AppTokens> {
 
   /// The single accent: the Send button (checks carry no accent).
   final Color accent;
-  final Color onAccent;
 
   /// The mark of a needed product in Plan; stage 2 decides between text and accent.
   final Color needMark;
-
-  /// Lighter corner of a card's gradient; null = flat [surface].
-  final Color? lift;
 
   final double radiusChip;
   final double radiusField;
@@ -112,22 +104,9 @@ class AppTokens extends ThemeExtension<AppTokens> {
   final double barWidth;
   final double tabBarWidth;
 
-  /// Shop cards get an outline in [line].
-  final bool cardOutline;
-
-  /// Blur radius of the halo around the accent button; 0 = none.
-  final double glow;
-
-  /// The accent button is filled with the accent; otherwise a tint plate with accent
-  /// text and a thin accent line.
-  final bool accentFilled;
-
   /// The mode switcher is two levitating buttons over the list, which fades out toward
   /// the bottom edge (needs [pillTabs]).
   final bool floatTabs;
-
-  /// Top bar buttons are tint plates; the status text beside them is not.
-  final bool plateButtons;
 
   /// Buttons, tabs and small labels use [displayFamily]; otherwise [fontFamily].
   final bool displayOnControls;
@@ -159,6 +138,18 @@ class AppTokens extends ThemeExtension<AppTokens> {
   final Color? shadowLight;
   final Color? shadowDark;
 
+  /// The light shadow is this part of the dark one in size: on a dark page a full-size
+  /// light shadow turns into a grey fog around the cards.
+  final double shadowLightScale;
+
+  /// A thin light line along the top edge of cards, gone before the middle of the sides
+  /// (the edge a raised plate catches light on); null = none.
+  final Color? rim;
+
+  /// The top colour of a card's vertical gradient into [surface]: a faint convexity
+  /// without a second shadow; null = a flat card.
+  final Color? sheen;
+
   /// The accent where it is text or a thin line on a surface (needs 4.5:1); the accent
   /// itself when null. Fills and bars use [accent].
   final Color? accentInk;
@@ -186,12 +177,14 @@ class AppTokens extends ThemeExtension<AppTokens> {
     final dark = shadowDark;
     if (depth == 0 || light == null || dark == null) return const [];
     final d = depth * scale;
+    final l = d * shadowLightScale;
     return [
-      BoxShadow(
-        color: light,
-        offset: Offset(-d, -d),
-        blurRadius: shadowBlur * d,
-      ),
+      if (shadowLightScale > 0)
+        BoxShadow(
+          color: light,
+          offset: Offset(-l, -l),
+          blurRadius: shadowBlur * l,
+        ),
       BoxShadow(color: dark, offset: Offset(d, d), blurRadius: shadowBlur * d),
     ];
   }
@@ -205,8 +198,6 @@ class AppTokens extends ThemeExtension<AppTokens> {
   /// Bundled variable font (weight axis); null = the platform font.
   final String? fontFamily;
 
-  /// Family of titles, labels and buttons; [fontFamily] when null.
-  final String? displayFamily;
   final FontWeight titleWeight;
   final FontWeight bodyWeight;
   final double titleSpacing;
@@ -236,9 +227,7 @@ class AppTokens extends ThemeExtension<AppTokens> {
     Color? text,
     Color? muted,
     Color? accent,
-    Color? onAccent,
     Color? needMark,
-    Color? lift,
     double? radiusChip,
     double? radiusField,
     double? radiusCard,
@@ -252,11 +241,7 @@ class AppTokens extends ThemeExtension<AppTokens> {
     double? lineWidth,
     double? barWidth,
     double? tabBarWidth,
-    bool? cardOutline,
-    double? glow,
-    bool? accentFilled,
     bool? floatTabs,
-    bool? plateButtons,
     bool? displayOnControls,
     bool? bigHeader,
     bool? compactTabs,
@@ -268,13 +253,15 @@ class AppTokens extends ThemeExtension<AppTokens> {
     bool? cardButtons,
     Color? shadowLight,
     Color? shadowDark,
+    double? shadowLightScale,
+    Color? rim,
+    Color? sheen,
     Color? accentInk,
     bool? statusInline,
     double? headingSize,
     double? tabHeight,
     double? captionSpacing,
     String? fontFamily,
-    String? displayFamily,
     FontWeight? titleWeight,
     FontWeight? bodyWeight,
     double? titleSpacing,
@@ -290,9 +277,7 @@ class AppTokens extends ThemeExtension<AppTokens> {
     text: text ?? this.text,
     muted: muted ?? this.muted,
     accent: accent ?? this.accent,
-    onAccent: onAccent ?? this.onAccent,
     needMark: needMark ?? this.needMark,
-    lift: lift ?? this.lift,
     radiusChip: radiusChip ?? this.radiusChip,
     radiusField: radiusField ?? this.radiusField,
     radiusCard: radiusCard ?? this.radiusCard,
@@ -306,11 +291,7 @@ class AppTokens extends ThemeExtension<AppTokens> {
     lineWidth: lineWidth ?? this.lineWidth,
     barWidth: barWidth ?? this.barWidth,
     tabBarWidth: tabBarWidth ?? this.tabBarWidth,
-    cardOutline: cardOutline ?? this.cardOutline,
-    glow: glow ?? this.glow,
-    accentFilled: accentFilled ?? this.accentFilled,
     floatTabs: floatTabs ?? this.floatTabs,
-    plateButtons: plateButtons ?? this.plateButtons,
     displayOnControls: displayOnControls ?? this.displayOnControls,
     bigHeader: bigHeader ?? this.bigHeader,
     compactTabs: compactTabs ?? this.compactTabs,
@@ -322,13 +303,15 @@ class AppTokens extends ThemeExtension<AppTokens> {
     cardButtons: cardButtons ?? this.cardButtons,
     shadowLight: shadowLight ?? this.shadowLight,
     shadowDark: shadowDark ?? this.shadowDark,
+    shadowLightScale: shadowLightScale ?? this.shadowLightScale,
+    rim: rim ?? this.rim,
+    sheen: sheen ?? this.sheen,
     accentInk: accentInk ?? this.accentInk,
     statusInline: statusInline ?? this.statusInline,
     headingSize: headingSize ?? this.headingSize,
     tabHeight: tabHeight ?? this.tabHeight,
     captionSpacing: captionSpacing ?? this.captionSpacing,
     fontFamily: fontFamily ?? this.fontFamily,
-    displayFamily: displayFamily ?? this.displayFamily,
     titleWeight: titleWeight ?? this.titleWeight,
     bodyWeight: bodyWeight ?? this.bodyWeight,
     titleSpacing: titleSpacing ?? this.titleSpacing,
@@ -349,9 +332,7 @@ class AppTokens extends ThemeExtension<AppTokens> {
       text: Color.lerp(text, other.text, t)!,
       muted: Color.lerp(muted, other.muted, t)!,
       accent: Color.lerp(accent, other.accent, t)!,
-      onAccent: Color.lerp(onAccent, other.onAccent, t)!,
       needMark: Color.lerp(needMark, other.needMark, t)!,
-      lift: Color.lerp(lift, other.lift, t),
       radiusChip: lerpDouble(radiusChip, other.radiusChip, t)!,
       radiusField: lerpDouble(radiusField, other.radiusField, t)!,
       radiusCard: lerpDouble(radiusCard, other.radiusCard, t)!,
@@ -365,11 +346,7 @@ class AppTokens extends ThemeExtension<AppTokens> {
       lineWidth: lerpDouble(lineWidth, other.lineWidth, t)!,
       barWidth: lerpDouble(barWidth, other.barWidth, t)!,
       tabBarWidth: lerpDouble(tabBarWidth, other.tabBarWidth, t)!,
-      cardOutline: t < 0.5 ? cardOutline : other.cardOutline,
-      glow: lerpDouble(glow, other.glow, t)!,
-      accentFilled: t < 0.5 ? accentFilled : other.accentFilled,
       floatTabs: t < 0.5 ? floatTabs : other.floatTabs,
-      plateButtons: t < 0.5 ? plateButtons : other.plateButtons,
       displayOnControls: t < 0.5 ? displayOnControls : other.displayOnControls,
       bigHeader: t < 0.5 ? bigHeader : other.bigHeader,
       compactTabs: t < 0.5 ? compactTabs : other.compactTabs,
@@ -381,13 +358,19 @@ class AppTokens extends ThemeExtension<AppTokens> {
       cardButtons: t < 0.5 ? cardButtons : other.cardButtons,
       shadowLight: Color.lerp(shadowLight, other.shadowLight, t),
       shadowDark: Color.lerp(shadowDark, other.shadowDark, t),
+      shadowLightScale: lerpDouble(
+        shadowLightScale,
+        other.shadowLightScale,
+        t,
+      )!,
+      rim: Color.lerp(rim, other.rim, t),
+      sheen: Color.lerp(sheen, other.sheen, t),
       accentInk: Color.lerp(accentInk, other.accentInk, t),
       statusInline: t < 0.5 ? statusInline : other.statusInline,
       headingSize: lerpDouble(headingSize, other.headingSize, t)!,
       tabHeight: lerpDouble(tabHeight, other.tabHeight, t)!,
       captionSpacing: lerpDouble(captionSpacing, other.captionSpacing, t),
       fontFamily: t < 0.5 ? fontFamily : other.fontFamily,
-      displayFamily: t < 0.5 ? displayFamily : other.displayFamily,
       titleWeight: FontWeight.lerp(titleWeight, other.titleWeight, t)!,
       bodyWeight: FontWeight.lerp(bodyWeight, other.bodyWeight, t)!,
       titleSpacing: lerpDouble(titleSpacing, other.titleSpacing, t)!,

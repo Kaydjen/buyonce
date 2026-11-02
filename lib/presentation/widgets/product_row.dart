@@ -145,7 +145,7 @@ class ProductRow extends StatelessWidget {
       // A card that paints its own surface leaves untaken rows clear.
       color: taken && t.depth == 0
           ? t.tint
-          : t.lift != null || t.depth > 0
+          : t.depth > 0
           ? const Color(0x00000000)
           : t.surface,
       borderRadius: BorderRadius.circular(t.radiusRow),

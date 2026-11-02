@@ -98,11 +98,11 @@ abstract final class AppTheme {
         ),
       ),
       popupMenuTheme: PopupMenuThemeData(
-        color: t.lift ?? t.surface,
+        color: t.surface,
         shape: _shape(t, t.radiusCard),
       ),
       bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: t.lift ?? t.surface,
+        backgroundColor: t.surface,
         modalElevation: 0,
         showDragHandle: true,
         dragHandleColor: t.line,
@@ -114,7 +114,7 @@ abstract final class AppTheme {
         ),
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: t.lift ?? t.surface,
+        backgroundColor: t.surface,
         shape: _shape(t, t.radiusCard),
       ),
       // The pill is drawn by showToast; this only keeps stray snackbars in the style.
@@ -142,28 +142,18 @@ abstract final class AppTheme {
   static OutlineInputBorder _fieldBorder(AppTokens t, Color color) =>
       OutlineInputBorder(
         borderRadius: BorderRadius.circular(t.radiusField),
-        borderSide: t.cardOutline
-            ? BorderSide(color: color, width: t.lineWidth)
-            : BorderSide.none,
+        borderSide: BorderSide.none,
       );
 
   static RoundedRectangleBorder _shape(AppTokens t, double radius) =>
-      RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(radius),
-        side: t.cardOutline
-            ? BorderSide(color: t.line, width: t.lineWidth)
-            : BorderSide.none,
-      );
+      RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius));
 
   /// The bundled font, its weights and letter spacing on every text style.
   static TextTheme _typeset(TextTheme x, AppTokens t) {
     TextStyle? title(TextStyle? s) => s == null
         ? null
         : t.weighted(
-            s.copyWith(
-              fontFamily: t.displayFamily ?? t.fontFamily,
-              letterSpacing: t.titleSpacing,
-            ),
+            s.copyWith(fontFamily: t.fontFamily, letterSpacing: t.titleSpacing),
             t.titleWeight,
           );
     TextStyle? body(TextStyle? s, [FontWeight? weight]) => s == null

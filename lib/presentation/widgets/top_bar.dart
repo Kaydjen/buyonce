@@ -96,7 +96,6 @@ class TopBar extends StatelessWidget {
               style: headerButtonStyle(context),
               child: const Text('Add'),
             ),
-          if (t.plateButtons) const SizedBox(width: 8),
           menu,
         ],
       ),

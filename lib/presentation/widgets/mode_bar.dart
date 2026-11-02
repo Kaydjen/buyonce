@@ -97,14 +97,27 @@ class ModeBar extends StatelessWidget {
                         ),
                       ],
               ),
-              child: Panel(
-                radius: t.radiusButton,
-                shadow: false,
-                padding: compact ? const EdgeInsets.all(4) : EdgeInsets.zero,
-                child: compact
-                    ? tabs
-                    : SizedBox(width: 248, height: 56, child: tabs),
-              ),
+              child: t.depth > 0
+                  ? Inset(
+                      radius: t.radiusButton,
+                      scale: 0.7,
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: compact
+                            ? tabs
+                            : SizedBox(width: 240, height: 48, child: tabs),
+                      ),
+                    )
+                  : Panel(
+                      radius: t.radiusButton,
+                      shadow: false,
+                      padding: compact
+                          ? const EdgeInsets.all(4)
+                          : EdgeInsets.zero,
+                      child: compact
+                          ? tabs
+                          : SizedBox(width: 248, height: 56, child: tabs),
+                    ),
             ),
           ),
         ),
@@ -148,20 +161,24 @@ class ModeBar extends StatelessWidget {
               : Center(child: text),
         ),
       );
-      // The pressed pill sinks into the selected tab and rises out of the other one.
+      // The raised thumb of a pressed track: it rises under the selected tab and sinks
+      // out of the other one.
       final pill = t.depth > 0
-          ? TweenAnimationBuilder<double>(
-              tween: Tween(end: selected ? 1 : 0),
+          ? AnimatedContainer(
               duration: _slide,
               curve: Curves.easeOutCubic,
-              builder: (_, v, child) => v == 0
-                  ? child!
-                  : Inset(
-                      radius: t.radiusButton,
-                      scale: 0.6,
-                      amount: v,
-                      child: child!,
-                    ),
+              decoration: BoxDecoration(
+                color: selected && t.sheen == null ? t.surface : null,
+                gradient: selected && t.sheen != null
+                    ? LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [t.sheen!, t.surface],
+                      )
+                    : null,
+                borderRadius: BorderRadius.circular(t.radiusButton),
+                boxShadow: selected ? t.raised(0.45) : const [],
+              ),
               child: plain,
             )
           : plain;

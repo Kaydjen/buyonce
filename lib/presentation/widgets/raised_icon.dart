@@ -30,9 +30,16 @@ class RaisedIcon extends StatelessWidget {
 
   Widget _plate(AppTokens t) => DecoratedBox(
     decoration: BoxDecoration(
-      color: t.surface,
+      color: t.sheen == null ? t.surface : null,
+      gradient: t.sheen == null
+          ? null
+          : LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [t.sheen!, t.surface],
+            ),
       shape: BoxShape.circle,
-      boxShadow: t.raised(0.6),
+      boxShadow: t.raised(0.5),
     ),
     child: Material(
       type: MaterialType.transparency,

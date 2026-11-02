@@ -15,10 +15,10 @@ Future<void> _pump(WidgetTester tester, StyleVariant variant) async {
   await tester.pumpAndSettle();
 }
 
-/// The visible plate of a card action (its first Material).
+/// The visible plate of a card action (its Ink).
 Rect _plate(WidgetTester tester, String key) => tester.getRect(
   find
-      .descendant(of: find.byKey(Key(key)), matching: find.byType(Material))
+      .descendant(of: find.byKey(Key(key)), matching: find.byType(Ink))
       .first,
 );
 

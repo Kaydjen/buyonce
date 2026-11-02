@@ -32,7 +32,6 @@ import '../widgets/card_action.dart';
 import '../widgets/card_menu.dart';
 import '../widgets/toast.dart';
 import '../widgets/card_title.dart';
-import '../widgets/header_bar.dart';
 import '../widgets/mode_bar.dart';
 import '../widgets/inset.dart';
 import '../widgets/panel.dart';
@@ -976,7 +975,6 @@ class _ListScreenState extends ConsumerState<ListScreen>
       : IconButton(
           key: const Key('menuButton'),
           tooltip: menuLabel,
-          style: headerIconStyle(context),
           onPressed: () => _openMenu(s),
           icon: _menuIcon(),
         );

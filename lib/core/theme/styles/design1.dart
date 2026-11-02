@@ -15,7 +15,6 @@ abstract final class Design1 {
     // 5.9:1 on tint.
     muted: Color(0xFFA59D99),
     accent: Color(0xFFE2B2A3),
-    onAccent: Color(0xFF0B0B0D),
     needMark: Color(0xFFF3EBDD),
   );
 
@@ -29,7 +28,6 @@ abstract final class Design1 {
     // 5.1:1 on tint.
     muted: Color(0xFF675B58),
     accent: Color(0xFF95564C),
-    onAccent: Color(0xFFFFFBF5),
     needMark: Color(0xFF19151A),
   );
 }
