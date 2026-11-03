@@ -87,6 +87,12 @@ class _PromptDialogState extends State<PromptDialog> {
               onSubmitted: (_) => _submit(),
             ),
           ),
+          // A slow connection: the dialog says it is working and cannot be pressed twice.
+          if (_busy)
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: LinearProgressIndicator(minHeight: 2),
+            ),
           if (_error != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
@@ -100,12 +106,12 @@ class _PromptDialogState extends State<PromptDialog> {
       ),
       cancel: PlainButton(
         label: context.l10n.cancel,
-        onPressed: () => Navigator.of(context).pop(),
+        onPressed: _busy ? null : () => Navigator.of(context).pop(),
       ),
       confirm: PlainButton(
         raised: true,
         label: widget.confirm,
-        onPressed: _text.text.trim().isEmpty ? null : _submit,
+        onPressed: _busy || _text.text.trim().isEmpty ? null : _submit,
       ),
     );
   }

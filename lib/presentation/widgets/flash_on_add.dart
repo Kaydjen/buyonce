@@ -6,9 +6,18 @@ import '../../core/theme/app_tokens.dart';
 
 /// Scrolls its row into view and pulses it once when [flash] is set, at creation or later.
 class FlashOnAdd extends StatefulWidget {
-  const FlashOnAdd({super.key, required this.flash, required this.child});
+  const FlashOnAdd({
+    super.key,
+    required this.flash,
+    required this.child,
+    this.onDone,
+  });
 
   final bool flash;
+
+  /// Called when the pulse has ended, so the row is not flashed again if it is rebuilt
+  /// later (scrolled out of the list and back).
+  final VoidCallback? onDone;
   final Widget child;
 
   @override
@@ -52,7 +61,13 @@ class _FlashOnAddState extends State<FlashOnAdd>
         duration: _scrollDuration(),
         curve: Curves.easeInOutCubic,
       );
-      if (mounted) _controller.forward();
+      if (!mounted) return;
+      try {
+        await _controller.forward().orCancel;
+      } on TickerCanceled {
+        return;
+      }
+      if (mounted) widget.onDone?.call();
     });
   }
 

@@ -206,6 +206,7 @@ Future<void> switchGroup(WidgetTester tester, String name) async {
 
 void main() {
   ukrainianLargeFont();
+  backClosesSearch();
   testWidgets('opens in Plan with the whole catalog and the Select card', (
     tester,
   ) async {
@@ -1300,5 +1301,21 @@ void ukrainianLargeFont() {
       await tester.scrollUntilVisible(find.byKey(Key(key)), 100);
       expect(tester.takeException(), isNull, reason: key);
     }
+  });
+}
+
+void backClosesSearch() {
+  testWidgets('Back closes an open search before it leaves the screen', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    await goShop(tester);
+    await tester.tap(find.byKey(const Key('findButton')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('addField')), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('addField')), findsNothing);
+    expect(find.text('Frequent'), findsOneWidget);
   });
 }

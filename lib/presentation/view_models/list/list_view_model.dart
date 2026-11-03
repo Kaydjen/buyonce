@@ -229,6 +229,8 @@ class ListViewModel extends AsyncNotifier<ListState> {
   Future<void> _sendIdleTrip(String groupId, String userId) async {
     ref.read(idleTimersProvider).remove('$groupId/$userId');
     ref.read(idleDeadlinesProvider).remove('$groupId/$userId');
+    // Signed out or switched to another user since the mark: nothing to send.
+    if (userId != ref.read(currentUserIdProvider)) return;
     if (groupId == ref.read(activeGroupIdProvider)) {
       await _apply((repo) => repo.sendTrip(userId));
     } else {
@@ -266,6 +268,12 @@ class ListViewModel extends AsyncNotifier<ListState> {
         pendingFlashId: pendingFlashId,
       ),
     );
+  }
+
+  /// The blink of the new product has ended.
+  void clearFlash() {
+    if (!state.hasValue || state.requireValue.flashId == null) return;
+    state = AsyncData(state.requireValue.copyWith(clearFlash: true));
   }
 
   /// The Shop search closes with the switch.

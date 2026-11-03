@@ -13,7 +13,7 @@ void showToast(
 }) {
   final messenger = ScaffoldMessenger.of(context);
   messenger
-    ..hideCurrentSnackBar()
+    ..clearSnackBars()
     ..showSnackBar(
       SnackBar(
         // The pill draws itself, with its own shadow.

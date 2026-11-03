@@ -2,4 +2,6 @@
 <resources>
     <!-- Accent of the app (#E5A25E): tints the small push icon. -->
     <color name="notification_accent">#E5A25E</color>
+    <!-- Launcher icon: white cart on the accent. -->
+    <color name="ic_launcher_background">#E5A25E</color>
 </resources>

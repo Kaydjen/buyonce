@@ -403,6 +403,10 @@ class _ListScreenState extends ConsumerState<ListScreen>
   void _setMode(ListMode mode) {
     _search.clear();
     _planFind = false;
+    // The two lists share one scroll view: each opens at its top, and an Undo of the
+    // other mode does not linger.
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+    ScaffoldMessenger.of(context).clearSnackBars();
     ref.read(listViewModelProvider.notifier).setMode(mode);
   }
 
@@ -498,13 +502,21 @@ class _ListScreenState extends ConsumerState<ListScreen>
     Haptics.send(context);
     final expected =
         ref.read(listViewModelProvider).value?.askProducts.length ?? 0;
-    _confirmSent(ask: true, text: context.l10n.notifiedCount(expected), count: expected);
+    _confirmSent(
+      ask: true,
+      text: context.l10n.notifiedCount(expected),
+      count: expected,
+    );
     final count = await ref.read(listViewModelProvider.notifier).ask();
     if (!mounted) return;
     if (count == 0) {
       _clearSent();
     } else if (count != expected) {
-      _confirmSent(ask: true, text: context.l10n.notifiedCount(count), count: count);
+      _confirmSent(
+        ask: true,
+        text: context.l10n.notifiedCount(count),
+        count: count,
+      );
     }
   }
 
@@ -572,45 +584,68 @@ class _ListScreenState extends ConsumerState<ListScreen>
     final async = ref.watch(listViewModelProvider);
     final vm = ref.read(listViewModelProvider.notifier);
     final float = context.tokens.floatTabs;
+    // While another group loads the old one's controls are gone, not tappable.
+    final ready = async.hasValue && !async.isLoading;
     // A write that was shown and then refused: the list is back to the real data.
     ref.listen(
       writeFailuresProvider,
       (_, _) => showToast(context, context.l10n.couldntSave),
     );
-    return Scaffold(
-      body: Stack(
-        children: [
-          // The levitating switcher lets the list run under the bottom inset, so the
-          // shadows of the cards are not cut by a line above the system buttons.
-          SafeArea(
-            bottom: !float,
-            child: switch (async) {
-              AsyncData(:final value) => _content(value, vm),
-              AsyncError() => LoadFailed(onRetry: () => ref.invalidate(listViewModelProvider)),
-              _ => const Center(child: CircularProgressIndicator()),
-            },
-          ),
-          if (float && async.hasValue)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: ModeBar(mode: async.requireValue.mode, onSelect: _setMode),
+    // Another group became active (push tap, removal): the old search is gone.
+    ref.listen(activeGroupIdProvider, (_, _) {
+      _search.clear();
+      _planFind = false;
+    });
+    final s = async.value;
+    final searchOpen =
+        s != null &&
+        (s.mode == ListMode.buy ? s.finding : (_planFind || s.searching));
+    // Back closes an open search first, then leaves.
+    return PopScope(
+      canPop: !searchOpen,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && s != null) _closeField(s);
+      },
+      child: Scaffold(
+        body: Stack(
+          children: [
+            // The levitating switcher lets the list run under the bottom inset, so the
+            // shadows of the cards are not cut by a line above the system buttons.
+            SafeArea(
+              bottom: !float,
+              child: switch (async) {
+                AsyncData(:final value) => _content(value, vm),
+                AsyncError() => LoadFailed(
+                  onRetry: () => ref.invalidate(listViewModelProvider),
+                ),
+                _ => const Center(child: CircularProgressIndicator()),
+              },
             ),
-        ],
-      ),
-      // Above the levitating switcher when there is one.
-      floatingActionButton: async.hasValue
-          ? Padding(
-              padding: EdgeInsets.only(
-                bottom: float ? context.tokens.floatLift : 0,
+            if (float && ready)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: ModeBar(
+                  mode: async.requireValue.mode,
+                  onSelect: _setMode,
+                ),
               ),
-              child: _sendButton(async.requireValue),
-            )
-          : null,
-      bottomNavigationBar: !float && async.hasValue
-          ? ModeBar(mode: async.requireValue.mode, onSelect: _setMode)
-          : null,
+          ],
+        ),
+        // Above the levitating switcher when there is one.
+        floatingActionButton: ready
+            ? Padding(
+                padding: EdgeInsets.only(
+                  bottom: float ? context.tokens.floatLift : 0,
+                ),
+                child: _sendButton(async.requireValue),
+              )
+            : null,
+        bottomNavigationBar: !float && ready
+            ? ModeBar(mode: async.requireValue.mode, onSelect: _setMode)
+            : null,
+      ),
     );
   }
 
@@ -723,9 +758,22 @@ class _ListScreenState extends ConsumerState<ListScreen>
             ),
           ),
         _header(s),
-        if (shop && s.othersTaken.isNotEmpty) _presence(s),
-        if (_noticeLines(s).isNotEmpty)
-          NoticeBanner(lines: _noticeLines(s), onDismiss: vm.dismissNotices),
+        // They grow and shrink instead of pushing the list in one frame.
+        AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: Column(
+            children: [
+              if (shop && s.othersTaken.isNotEmpty) _presence(s),
+              if (_noticeLines(s).isNotEmpty)
+                NoticeBanner(
+                  lines: _noticeLines(s),
+                  onDismiss: vm.dismissNotices,
+                ),
+            ],
+          ),
+        ),
       ],
     );
     // The list fades into the page under the bar; the switcher has its own edge.
@@ -1062,7 +1110,9 @@ class _ListScreenState extends ConsumerState<ListScreen>
     final authors = {for (final p in s.newProducts) _nameOf(p.plannedBy)}
         .where((n) => n.isNotEmpty)
         .join(', ');
-    return authors.isEmpty ? context.l10n.newLabel : context.l10n.newBy(authors);
+    return authors.isEmpty
+        ? context.l10n.newLabel
+        : context.l10n.newBy(authors);
   }
 
   /// "Mark all" of one card: takes that card's products nobody has taken yet; null
@@ -1157,6 +1207,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
     return FlashOnAdd(
       key: key,
       flash: flash && s.flashId == p.id,
+      onDone: ref.read(listViewModelProvider.notifier).clearFlash,
       child: ProductRow(
         name: p.name,
         mark: mark,
@@ -1167,7 +1218,9 @@ class _ListScreenState extends ConsumerState<ListScreen>
         showDivider: divider,
         onTap: () {
           if (mark == RowMark.partner) {
-            _hintTaken(context.l10n.alreadyBoughtBy(_nameOf(s.partnerOf(p.id))));
+            _hintTaken(
+              context.l10n.alreadyBoughtBy(_nameOf(s.partnerOf(p.id))),
+            );
             return;
           }
           // Plan never unmarks: a product that vanished from the trip would

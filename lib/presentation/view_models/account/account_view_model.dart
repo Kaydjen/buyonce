@@ -23,7 +23,13 @@ class AccountViewModel extends AsyncNotifier<Account?> {
   String get _userId => ref.read(userSlotProvider);
 
   /// A user who had no name before gets the name screen once, prefilled by the sign-in.
-  Future<Result<void>> signIn() async {
+  Future<Result<void>> signIn() =>
+      _signingIn ??= _signIn().whenComplete(() => _signingIn = null);
+
+  Future<Result<void>>? _signingIn;
+  Future<Result<void>>? _deleting;
+
+  Future<Result<void>> _signIn() async {
     final userId = _userId;
     final result = await ref.read(signInUseCaseProvider)(userId);
     if (result case Ok(:final value)) {
@@ -60,7 +66,10 @@ class AccountViewModel extends AsyncNotifier<Account?> {
 
   /// Fails with [AccountError.reauthFailed] when Google does not confirm. On success the groups
   /// and names are read again: the user is left with an empty personal list.
-  Future<Result<void>> deleteAccount() async {
+  Future<Result<void>> deleteAccount() =>
+      _deleting ??= _deleteAccount().whenComplete(() => _deleting = null);
+
+  Future<Result<void>> _deleteAccount() async {
     final result = await ref.read(deleteAccountUseCaseProvider)(
       _userId,
       ref.read(currentUserIdProvider),

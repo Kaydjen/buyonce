@@ -47,27 +47,32 @@ Future<T?> showCardSheet<T>(
     barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
     barrierColor: veil,
     transitionDuration: const Duration(milliseconds: 260),
-    pageBuilder: (context, _, _) => Align(
+    pageBuilder: (context, animation, _) => Align(
       alignment: Alignment.topCenter,
-      // A swipe up closes it, like pulling the shade back.
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onVerticalDragEnd: (d) {
-          if ((d.primaryVelocity ?? 0) < -300) Navigator.of(context).pop();
-        },
-        child: Material(type: MaterialType.transparency, child: body(context)),
-      ),
-    ),
-    transitionBuilder: (context, animation, _, child) => SlideTransition(
-      position: Tween(begin: const Offset(0, -1), end: Offset.zero).animate(
-        CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-          reverseCurve: Curves.easeInCubic,
+      // The card slides by its own height, so it is moving from the first frame (a
+      // slide of the whole screen would leave it invisible for the first moments).
+      child: SlideTransition(
+        position: Tween(begin: const Offset(0, -1), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          ),
+        ),
+        // A swipe up closes it, like pulling the shade back.
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onVerticalDragEnd: (d) {
+            if ((d.primaryVelocity ?? 0) < -300) Navigator.of(context).pop();
+          },
+          child: Material(
+            type: MaterialType.transparency,
+            child: body(context),
+          ),
         ),
       ),
-      child: child,
     ),
+    transitionBuilder: (context, animation, _, child) => child,
   );
 }
 

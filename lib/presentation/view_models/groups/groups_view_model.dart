@@ -108,14 +108,27 @@ class GroupsViewModel extends AsyncNotifier<List<Group>> {
   Future<Result<void>> rename(String groupId, String name) async =>
       _reload(await _repo.rename(groupId, _userId, name));
 
-  Future<Result<void>> removeMember(String groupId, String memberId) async =>
-      _reload(await _repo.removeMember(groupId, _userId, memberId));
+  /// A second press while the first still runs gets the same answer instead of a
+  /// second run (these calls take seconds on a bad connection).
+  final _inFlight = <String, Future<Result<void>>>{};
 
-  Future<Result<void>> leave(String groupId) async =>
-      _reload(await _repo.leave(groupId, _userId));
+  Future<Result<void>> _once(String key, Future<Result<void>> Function() run) =>
+      _inFlight[key] ??= run().whenComplete(() => _inFlight.remove(key));
 
-  Future<Result<void>> delete(String groupId) async =>
-      _reload(await _repo.delete(groupId, _userId));
+  Future<Result<void>> removeMember(String groupId, String memberId) => _once(
+    'remove/$groupId/$memberId',
+    () async => _reload(await _repo.removeMember(groupId, _userId, memberId)),
+  );
+
+  Future<Result<void>> leave(String groupId) => _once(
+    'leave/$groupId',
+    () async => _reload(await _repo.leave(groupId, _userId)),
+  );
+
+  Future<Result<void>> delete(String groupId) => _once(
+    'delete/$groupId',
+    () async => _reload(await _repo.delete(groupId, _userId)),
+  );
 
   Future<Result<void>> setMuted(String groupId, bool muted) async =>
       _reload(await _repo.setMuted(groupId, _userId, muted));

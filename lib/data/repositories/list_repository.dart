@@ -368,6 +368,8 @@ class ListRepository {
     required bool marked,
   }) => _service.getOpenTrips(groupId).andThen((trips) {
     final open = trips.where((t) => t.userId == userId).firstOrNull;
+    // An Undo that comes after the trip was sent has nothing to take back.
+    if (!marked && open == null) return Future.value(const Ok<void>(null));
     final now = DateTime.now();
     final trip =
         open ??

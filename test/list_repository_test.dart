@@ -28,6 +28,13 @@ Future<List<String>> names(ListRepository repo) async {
 
 void main() {
   autoSendAtTests();
+
+  test('an Undo with no open trip creates no empty trip', () async {
+    final repo = newRepo();
+    final result = await repo.setMarks(['seed1'], 'me', marked: false);
+    expect(result, isA<Ok<void>>());
+    expect(((await repo.getOpenTrips()) as Ok<List<Trip>>).value, isEmpty);
+  });
   test('sort by frequency puts the most bought first', () async {
     final repo = newRepo();
     await repo.sortBy(SortKey.frequency);

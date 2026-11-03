@@ -41,12 +41,16 @@ class _AddProductsScreenState extends ConsumerState<AddProductsScreen> {
     _focus.requestFocus();
   }
 
+  bool _committing = false;
+
   Future<void> _commit() async {
+    if (_committing) return;
     // A name typed but not confirmed with Enter is not lost.
     _drafts.add(_field.text);
     _field.clear();
     final names = ref.read(draftsViewModelProvider(_groupId));
     if (names.isEmpty) return;
+    _committing = true;
     final changed = await ref
         .read(listViewModelProvider.notifier)
         .addProducts(names);
