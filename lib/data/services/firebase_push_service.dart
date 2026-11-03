@@ -20,6 +20,23 @@ class FirebasePushService implements PushService {
   DocumentReference<Map<String, dynamic>> _doc(String userId) =>
       _db.collection('users').doc(userId);
 
+  /// The group of a push, from the `groupId` the Worker puts into its data; null if absent.
+  static String? groupIdOf(Map<String, dynamic> data) {
+    final id = data['groupId'];
+    return id is String && id.isNotEmpty ? id : null;
+  }
+
+  @override
+  Stream<String> get openedGroupIds async* {
+    final initial = await _messaging.getInitialMessage();
+    final first = initial == null ? null : groupIdOf(initial.data);
+    if (first != null) yield first;
+    await for (final message in FirebaseMessaging.onMessageOpenedApp) {
+      final id = groupIdOf(message.data);
+      if (id != null) yield id;
+    }
+  }
+
   @override
   Future<void> register(String userId) async {
     if (_userId == userId) return;

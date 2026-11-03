@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/result.dart';
 import '../../../data/repositories/account_repository.dart';
+import '../../../data/repositories/settings_repository.dart';
 import '../../../domain/models/account.dart';
 import '../../../domain/use_cases/delete_account_use_case.dart';
 import '../../../domain/use_cases/sign_in_use_case.dart';
@@ -86,15 +87,28 @@ final namePendingProvider = NotifierProvider<NamePending, bool>(
 );
 
 /// The user chose to use the app without an account (or signed out): the login screen
-/// is not shown again. Kept in memory only for now.
-class LocalMode extends Notifier<bool> {
+/// is not shown again, also after a restart. The state is null until the stored value
+/// is read, so the login screen does not flash.
+class LocalMode extends Notifier<bool?> {
   @override
-  bool build() => false;
+  bool? build() {
+    _load();
+    return null;
+  }
 
-  void set(bool local) => state = local;
+  Future<void> _load() async {
+    final stored = await ref.read(settingsRepositoryProvider).loadLocalMode();
+    // A choice made while the read was running wins over the stored one.
+    if (ref.mounted && state == null) state = stored ?? false;
+  }
+
+  void set(bool local) {
+    state = local;
+    ref.read(settingsRepositoryProvider).saveLocalMode(local);
+  }
 }
 
-final localModeProvider = NotifierProvider<LocalMode, bool>(LocalMode.new);
+final localModeProvider = NotifierProvider<LocalMode, bool?>(LocalMode.new);
 
 final accountViewModelProvider =
     AsyncNotifierProvider<AccountViewModel, Account?>(AccountViewModel.new);

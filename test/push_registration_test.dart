@@ -14,6 +14,8 @@ import 'package:flutter_test/flutter_test.dart';
 class _Push implements PushService {
   final calls = <String>[];
   @override
+  Stream<String> get openedGroupIds => const Stream.empty();
+  @override
   Future<void> register(String userId) async => calls.add('register $userId');
   @override
   Future<void> unregister(String userId) async =>

@@ -25,8 +25,13 @@ class AppGate extends ConsumerWidget {
     if (!account.hasValue) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    if (account.requireValue == null && !ref.watch(localModeProvider)) {
-      return const LoginScreen();
+    if (account.requireValue == null) {
+      final local = ref.watch(localModeProvider);
+      // The stored choice is still being read: no login screen flash.
+      if (local == null) {
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      }
+      if (!local) return const LoginScreen();
     }
     if (ref.watch(namePendingProvider)) return const NameScreen();
     final groups = ref.watch(groupsViewModelProvider);

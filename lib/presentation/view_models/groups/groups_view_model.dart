@@ -6,6 +6,7 @@ import '../../../data/repositories/list_repository.dart';
 import '../../../domain/models/group.dart';
 import '../account/account_view_model.dart';
 import '../../../data/services/identity.dart';
+import '../../../data/services/service_providers.dart';
 import '../list/sync_state.dart';
 import '../session/session.dart';
 
@@ -134,6 +135,18 @@ final activeGroupIdProvider = Provider<String?>((ref) {
   final picked = ref.watch(selectedGroupIdProvider);
   if (groups.any((g) => g.id == picked)) return picked;
   return (groups.where((g) => !g.personal).firstOrNull ?? groups.first).id;
+});
+
+/// A tap on a push shows its group (watched by the app root). An id the user does not
+/// belong to is ignored by [activeGroupIdProvider].
+final pushOpenProvider = Provider<void>((ref) {
+  final push = ref.watch(realPushServiceProvider);
+  if (push == null) return;
+  final subscription = push.openedGroupIds.listen(
+    (id) => ref.read(selectedGroupIdProvider.notifier).select(id),
+    onError: (Object _) {},
+  );
+  ref.onDispose(subscription.cancel);
 });
 
 /// The list repository of the group shown now.

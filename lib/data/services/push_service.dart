@@ -9,4 +9,8 @@ abstract interface class PushService {
   /// Removes the saved token of [userId] and stops following the system. Must run while
   /// that user is still signed in (the rules allow only the owner).
   Future<void> unregister(String userId);
+
+  /// Ids of the groups whose push the user tapped: the one that started the app and
+  /// the ones tapped while the app was in the background.
+  Stream<String> get openedGroupIds;
 }

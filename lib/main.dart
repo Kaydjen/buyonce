@@ -14,6 +14,7 @@ import 'data/services/http_send_worker.dart';
 import 'data/services/identity.dart';
 import 'data/services/service_providers.dart';
 import 'domain/models/app_settings.dart';
+import 'presentation/view_models/groups/groups_view_model.dart';
 import 'presentation/view_models/settings/style_variant_view_model.dart';
 import 'presentation/view_models/settings/settings_view_model.dart';
 import 'presentation/screens/app_gate.dart';
@@ -53,6 +54,7 @@ class BuyOnceApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(pushRegistrationProvider);
+    ref.watch(pushOpenProvider);
     final variant = ref.watch(styleVariantProvider);
     return MaterialApp(
       debugShowCheckedModeBanner: false,

@@ -12,6 +12,18 @@ class SettingsRepository {
   static const _autoSendSeconds = 'autoSendSeconds';
   static const _theme = 'theme';
   static const _textScale = 'textScale';
+  static const _localMode = 'localMode';
+
+  /// Whether the user chose to use the app without an account; null if never chosen
+  /// or unreadable.
+  Future<bool?> loadLocalMode() async =>
+      switch (await _service.getBool(_localMode)) {
+        Ok(:final value) => value,
+        Failure() => null,
+      };
+
+  Future<Result<void>> saveLocalMode(bool local) =>
+      _service.setBool(_localMode, local);
 
   /// Unreadable or unknown stored values fall back to the defaults.
   Future<Result<AppSettings>> load() async {

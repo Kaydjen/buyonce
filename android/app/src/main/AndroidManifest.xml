@@ -30,6 +30,10 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Push messages go to this channel (created in MainActivity). -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="purchases" />
         <!-- Impeller needs about twice the raster time of Skia on the soft shadows of
              this app (measured on the SM A525F: the group sheet slid at 45 fps). -->
         <meta-data
