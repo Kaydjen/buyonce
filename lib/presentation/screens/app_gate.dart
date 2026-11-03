@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../view_models/account/account_view_model.dart';
 import '../view_models/groups/groups_view_model.dart';
 import '../view_models/update/update_view_model.dart';
+import '../widgets/load_failed.dart';
 import 'list_screen.dart';
 import 'login_screen.dart';
 import 'name_screen.dart';
@@ -20,7 +21,7 @@ class AppGate extends ConsumerWidget {
     ref.read(updateViewModelProvider);
     final account = ref.watch(accountViewModelProvider);
     if (account.hasError) {
-      return const Scaffold(body: Center(child: Text('Failed to load')));
+      return Scaffold(body: LoadFailed(onRetry: () => ref.invalidate(accountViewModelProvider)));
     }
     if (!account.hasValue) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -36,7 +37,7 @@ class AppGate extends ConsumerWidget {
     if (ref.watch(namePendingProvider)) return const NameScreen();
     final groups = ref.watch(groupsViewModelProvider);
     if (groups.hasError) {
-      return const Scaffold(body: Center(child: Text('Failed to load')));
+      return Scaffold(body: LoadFailed(onRetry: () => ref.invalidate(groupsViewModelProvider)));
     }
     if (!groups.hasValue) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));

@@ -16,6 +16,10 @@ import '../session/session.dart';
 /// The groups of the signed-in user. Every action reloads the list and moves the
 /// selection when it has to (a new group is shown at once, a left group is not).
 class GroupsViewModel extends AsyncNotifier<List<Group>> {
+  /// Counts the builds: a build that was replaced while it loaded must not subscribe
+  /// (the notifier object is the same, so `ref.mounted` stays true for it).
+  int _generation = 0;
+
   @override
   Future<List<Group>> build() async {
     final repo = ref.watch(groupRepositoryProvider);
@@ -23,10 +27,21 @@ class GroupsViewModel extends AsyncNotifier<List<Group>> {
     final signedIn = ref.watch(
       accountViewModelProvider.select((a) => a.value != null),
     );
+    final subscriptions = <StreamSubscription<Object?>>[];
+    ref.onDispose(() {
+      for (final s in subscriptions) {
+        s.cancel();
+      }
+    });
+    final generation = ++_generation;
     final first = await _load(repo, userId, signedIn);
+    // Built again while loading (the account answered after the first build): this
+    // build is out of date, and a listener of it would later overwrite the groups of
+    // the current one with its own `signedIn`, hiding the groups for a moment.
+    if (generation != _generation) return first;
     // From here the groups follow the server: a member who joins or leaves, a rename
     // on another phone.
-    final subscriptions = [
+    subscriptions.addAll([
       repo.watchGroupsOf(userId).skip(1).listen((result) {
         if (result case Ok(:final value)) {
           state = AsyncData(_visible(value, signedIn));
@@ -36,12 +51,7 @@ class GroupsViewModel extends AsyncNotifier<List<Group>> {
           .read(groupServiceProvider)
           .writeErrors
           .listen((_) => ref.read(writeFailuresProvider.notifier).report()),
-    ];
-    ref.onDispose(() {
-      for (final s in subscriptions) {
-        s.cancel();
-      }
-    });
+    ]);
     return first;
   }
 

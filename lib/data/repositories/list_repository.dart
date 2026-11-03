@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/utils/clip.dart';
 import '../../core/utils/new_id.dart';
 import '../../core/utils/result.dart';
 import '../../core/utils/result_x.dart';
@@ -103,7 +104,7 @@ class ListRepository {
     final product = Product(
       id: newId(),
       groupId: groupId,
-      name: name,
+      name: clip(name, maxProductNameLength),
       position: position,
       planned: planned,
       plannedBy: planned ? userId : null,
@@ -301,9 +302,15 @@ class ListRepository {
   Future<Result<List<Notice>>> getNotices(String userId) =>
       _service.getNotices(groupId).map(_unseenFor(userId));
 
-  Future<Result<void>> markNoticesSeen(String userId) =>
+  /// Marks the user's notices as seen; with [sentBefore] only the ones sent before it.
+  Future<Result<void>> markNoticesSeen(String userId, {DateTime? sentBefore}) =>
       _service.getNotices(groupId).andThen((all) async {
-        for (final n in all.where((n) => n.toUserId == userId && !n.seen)) {
+        for (final n in all.where(
+          (n) =>
+              n.toUserId == userId &&
+              !n.seen &&
+              (sentBefore == null || n.sentAt.isBefore(sentBefore)),
+        )) {
           final saved = await _service.markNoticeSeen(n);
           if (saved case Failure(:final error)) return Failure(error);
         }

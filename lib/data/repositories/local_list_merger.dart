@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/utils/clip.dart';
 import '../../core/utils/new_id.dart';
 import '../../core/utils/result.dart';
 import '../../domain/models/group.dart';
@@ -48,7 +49,7 @@ class LocalListMerger {
           Product(
             id: newId(),
             groupId: targetId,
-            name: p.name,
+            name: clip(p.name, maxProductNameLength),
             position: next,
             planned: p.planned,
             plannedBy: p.planned ? userId : null,

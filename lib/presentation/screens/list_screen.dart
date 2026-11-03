@@ -20,6 +20,7 @@ import '../view_models/update/update_view_model.dart';
 import '../view_models/users/user_names_view_model.dart';
 import '../widgets/debug_user_sheet.dart';
 import '../widgets/edge_fade.dart';
+import '../widgets/load_failed.dart';
 import '../widgets/flash_on_add.dart';
 import '../widgets/group_dialogs.dart';
 import '../widgets/group_sheet.dart';
@@ -582,7 +583,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
             bottom: !float,
             child: switch (async) {
               AsyncData(:final value) => _content(value, vm),
-              AsyncError() => const Center(child: Text('Failed to load')),
+              AsyncError() => LoadFailed(onRetry: () => ref.invalidate(listViewModelProvider)),
               _ => const Center(child: CircularProgressIndicator()),
             },
           ),

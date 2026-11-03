@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/utils/clip.dart';
 import '../../core/utils/new_id.dart';
 import '../../core/utils/result.dart';
 import '../../core/utils/result_x.dart';
@@ -63,7 +64,7 @@ class GroupRepository {
     String userId, {
     Duration? utcOffset,
   }) async {
-    final trimmed = name.trim();
+    final trimmed = clip(name.trim(), maxGroupNameLength);
     if (trimmed.isEmpty) return const Failure(GroupError.emptyName);
     return _groups.create(
       id: newId(),
@@ -79,7 +80,7 @@ class GroupRepository {
       _groups.join(code.trim().toUpperCase(), userId);
 
   Future<Result<void>> rename(String groupId, String actorId, String name) {
-    final trimmed = name.trim();
+    final trimmed = clip(name.trim(), maxGroupNameLength);
     if (trimmed.isEmpty) {
       return Future.value(const Failure(GroupError.emptyName));
     }

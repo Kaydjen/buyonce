@@ -58,8 +58,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await switchTo(tester, 'Anna');
-    expect(find.textContaining('Alex needs: Pears\n'), findsOneWidget);
-    expect(find.textContaining('Alex needs: Honey, Plums'), findsOneWidget);
+    expect(find.text('Alex needs: Pears, Honey, Plums'), findsOneWidget);
   });
 
   testWidgets('a product somebody has already taken is not asked for', (

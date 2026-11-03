@@ -7,6 +7,7 @@ import '../view_models/history/history_days.dart';
 import '../view_models/history/history_view_model.dart';
 import '../view_models/session/session.dart';
 import '../view_models/users/user_names_view_model.dart';
+import '../widgets/load_failed.dart';
 import '../widgets/titled_card.dart';
 import '../widgets/edge_fade.dart';
 
@@ -85,7 +86,7 @@ class HistoryScreen extends ConsumerWidget {
             ],
           ),
         ),
-        AsyncError() => const Center(child: Text('Failed to load')),
+        AsyncError() => LoadFailed(onRetry: () => ref.invalidate(historyViewModelProvider)),
         _ => const Center(child: CircularProgressIndicator()),
       },
     );
