@@ -1,18 +1,31 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'account_service.dart';
+import 'group_service.dart';
 import 'in_memory_account_service.dart';
 import 'in_memory_group_service.dart';
 import 'in_memory_list_service.dart';
 import 'in_memory_update_service.dart';
 import 'in_memory_user_service.dart';
+import 'list_service.dart';
 import 'update_service.dart';
+import 'user_service.dart';
 
 final inMemoryListServiceProvider = Provider((ref) => InMemoryListService());
 
+/// Products, trips, plans and notices on Firestore; null in tests, `main` sets it
+/// (see `identity.dart`).
+final realListServiceProvider = Provider<ListService?>((ref) => null);
+
 final inMemoryGroupServiceProvider = Provider((ref) => InMemoryGroupService());
 
+/// Groups on Firestore; null in tests, `main` sets it (see `identity.dart`).
+final realGroupServiceProvider = Provider<GroupService?>((ref) => null);
+
 final inMemoryUserServiceProvider = Provider((ref) => InMemoryUserService());
+
+/// Names on Firestore; null in tests, `main` sets it (see `identity.dart`).
+final realUserServiceProvider = Provider<UserService?>((ref) => null);
 
 final inMemoryAccountServiceProvider = Provider(
   (ref) => InMemoryAccountService(),

@@ -4,13 +4,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/result.dart';
 import '../../../data/repositories/list_repository.dart';
+import '../../../domain/models/notice.dart';
 import '../../../domain/models/plan.dart';
 import '../../../domain/models/product.dart';
 import '../../../domain/models/sort_key.dart';
+import '../../../domain/models/trip.dart';
 import '../groups/groups_view_model.dart';
 import '../session/session.dart';
 import '../settings/settings_view_model.dart';
 import 'list_state.dart';
+import 'sync_state.dart';
 
 /// The screen the user was on last; kept across group switches (the view model is
 /// rebuilt then). Null until the user switches once.
@@ -67,14 +70,105 @@ class ListViewModel extends AsyncNotifier<ListState> {
         }
       });
     });
-    final loaded = await _load(
-      ref.watch(listRepositoryProvider),
-      ListState(mode: ref.read(lastModeProvider) ?? ListMode.buy),
-    );
+    final repo = ref.watch(listRepositoryProvider);
+    // A user switch (debug) starts the list over for that user.
+    final userId = ref.watch(currentUserIdProvider);
+    _unwrap(await repo.sendStaleTrips(onlyUser: userId));
+
+    // The four live lists. The first value of each arrives at once from a local
+    // store; later values follow every change, my own writes included.
+    List<Product>? products;
+    List<Trip>? trips;
+    List<Plan>? plans;
+    List<Notice>? notices;
+    var built = false;
+    final loaded = Completer<void>();
+    void changed() {
+      if (products == null ||
+          trips == null ||
+          plans == null ||
+          notices == null) {
+        return;
+      }
+      if (!built) {
+        if (!loaded.isCompleted) loaded.complete();
+        return;
+      }
+      state = AsyncData(
+        state.requireValue.withData(
+          products: products!,
+          trips: trips!,
+          plans: plans!,
+          notices: notices!,
+        ),
+      );
+    }
+
+    StreamSubscription<Result<List<T>>> listen<T>(
+      Stream<Result<List<T>>> stream,
+      void Function(List<T> value) take,
+    ) => stream.listen((result) {
+      switch (result) {
+        case Ok(:final value):
+          take(value);
+          changed();
+        case Failure(:final error):
+          // Only a failed first load replaces the screen; later the data stays.
+          if (!built) {
+            if (!loaded.isCompleted) loaded.completeError(error);
+          } else {
+            ref.read(writeFailuresProvider.notifier).report();
+          }
+      }
+    });
+
+    final subscriptions = [
+      listen(repo.watchProducts(), (v) => products = v),
+      listen(repo.watchOpenTrips(), (v) => trips = v),
+      listen(repo.watchPlans(), (v) => plans = v),
+      listen(repo.watchNotices(userId), (v) => notices = v),
+      repo.writeErrors.listen(
+        (_) => ref.read(writeFailuresProvider.notifier).report(),
+      ),
+      repo.online.listen(
+        (online) => ref.read(offlineProvider.notifier).set(!online),
+      ),
+    ];
+    ref.onDispose(() {
+      for (final subscription in subscriptions) {
+        subscription.cancel();
+      }
+    });
+    await loaded.future;
+    final session = await _session(repo, userId);
+    // No await from here to the return: a change arriving later updates the state.
+    built = true;
+    final initial =
+        ListState(
+          userId: userId,
+          mode: ref.read(lastModeProvider) ?? ListMode.buy,
+          autoSendAt: ref.read(idleDeadlinesProvider)[_idleKey(userId)],
+          newSince: session.newSince,
+          askedAt: session.askedAt,
+        ).withData(
+          products: products!,
+          trips: trips!,
+          plans: plans!,
+          notices: notices!,
+        );
     // Unsent marks mean a shopping trip is going on: open in Shop.
-    return (loaded.hasUnsent ? loaded.copyWith(mode: ListMode.buy) : loaded)
+    return (initial.hasUnsent ? initial.copyWith(mode: ListMode.buy) : initial)
         .copyWith(rankFrequent: true);
   }
+
+  /// What a visit knows besides the lists: where "New" starts and the last "Notify".
+  Future<({DateTime? newSince, DateTime? askedAt})> _session(
+    ListRepository repo,
+    String userId,
+  ) async => (
+    newSince: ref.read(visitTrackerProvider).enter(_groupId, userId),
+    askedAt: _unwrap(await repo.getAskedAt(userId)),
+  );
 
   String get _groupId => ref.read(activeGroupIdProvider)!;
 
@@ -82,16 +176,13 @@ class ListViewModel extends AsyncNotifier<ListState> {
 
   /// Restarts the idle countdown after a trip action (a mark added or removed);
   /// stops it when the user has no marks left. Other edits of the list do not count.
-  void _restartIdleTimer(String userId) {
+  void _restartIdleTimer(String userId, {required bool hasMarks}) {
     final timers = ref.read(idleTimersProvider);
     final key = _idleKey(userId);
     timers.remove(key)?.cancel();
     final deadlines = ref.read(idleDeadlinesProvider);
     deadlines.remove(key);
     final delay = ref.read(autoNotifyDelayProvider);
-    final hasMarks = state.requireValue.trips.any(
-      (t) => t.userId == userId && t.marks.isNotEmpty,
-    );
     if (!hasMarks || delay == null) {
       state = AsyncData(state.requireValue.copyWith(clearAutoSend: true));
       return;
@@ -118,38 +209,6 @@ class ListViewModel extends AsyncNotifier<ListState> {
   void selectGroup(String groupId) =>
       ref.read(selectedGroupIdProvider.notifier).select(groupId);
 
-  Future<ListState> _load(
-    ListRepository repo,
-    ListState base, {
-    String? flashId,
-    String? pendingFlashId,
-  }) async {
-    _unwrap(await repo.sendStaleTrips());
-    final products = _unwrap(await repo.getProducts());
-    final trips = _unwrap(await repo.getOpenTrips());
-    final plans = _unwrap(await repo.getPlans());
-    final usage = _unwrap(await repo.getUsage());
-    final userId = ref.read(currentUserIdProvider);
-    final notices = _unwrap(await repo.getNotices(userId));
-    return ListState(
-      products: products,
-      trips: trips,
-      userId: userId,
-      notices: notices,
-      plans: plans,
-      usage: usage,
-      mode: base.mode,
-      query: base.query,
-      finding: base.finding,
-      autoSendAt: ref.read(idleDeadlinesProvider)[_idleKey(userId)],
-      flashId: flashId,
-      pendingFlashId: pendingFlashId ?? base.pendingFlashId,
-      frequentIds: base.frequentIds,
-      newSince: ref.read(visitTrackerProvider).enter(_groupId, userId),
-      askedAt: _unwrap(await repo.getAskedAt(userId)),
-    );
-  }
-
   T _unwrap<T>(Result<T> result) => switch (result) {
     Ok(:final value) => value,
     Failure(:final error) => throw error,
@@ -161,15 +220,21 @@ class ListViewModel extends AsyncNotifier<ListState> {
     String? pendingFlashId,
   }) async {
     final repo = ref.read(listRepositoryProvider);
-    state = await AsyncValue.guard(() async {
-      _unwrap(await action(repo));
-      return _load(
-        repo,
-        state.requireValue,
+    // The write is applied locally when the call returns and shows through the live
+    // lists; nothing here waits for the server. A refusal comes later, see `build`.
+    final result = await action(repo);
+    if (result case Failure()) {
+      ref.read(writeFailuresProvider.notifier).report();
+      return;
+    }
+    if (!ref.mounted || !state.hasValue) return;
+    state = AsyncData(
+      state.requireValue.copyWith(
+        clearFlash: true,
         flashId: flashId?.call(),
         pendingFlashId: pendingFlashId,
-      );
-    });
+      ),
+    );
   }
 
   /// The Shop search closes with the switch.
@@ -257,7 +322,13 @@ class ListViewModel extends AsyncNotifier<ListState> {
           ? product.id
           : null,
     );
-    if (current.mode == ListMode.buy) _restartIdleTimer(userId);
+    if (current.mode == ListMode.buy) {
+      // Judged from the state before the tap: the live list may not show it yet.
+      _restartIdleTimer(
+        userId,
+        hasMarks: becomesActive || current.myMarkIds.length > 1,
+      );
+    }
   }
 
   /// Shop: takes the needed products of one card that nobody has taken yet; the
@@ -268,14 +339,15 @@ class ListViewModel extends AsyncNotifier<ListState> {
     final ids = [for (final p in state.requireValue.untakenOf(card)) p.id];
     if (ids.isEmpty) return ids;
     await _apply((repo) => repo.setMarks(ids, userId, marked: true));
-    _restartIdleTimer(userId);
+    _restartIdleTimer(userId, hasMarks: true);
     return ids;
   }
 
   Future<void> undoMarkAll(List<String> ids) async {
     final userId = ref.read(currentUserIdProvider);
+    final left = {...state.requireValue.myMarkIds}..removeAll(ids);
     await _apply((repo) => repo.setMarks(ids, userId, marked: false));
-    _restartIdleTimer(userId);
+    _restartIdleTimer(userId, hasMarks: left.isNotEmpty);
   }
 
   /// Moves a product inside [group], the rows of one list as shown (the whole Plan list
@@ -287,15 +359,17 @@ class ListViewModel extends AsyncNotifier<ListState> {
   }) {
     final s = state.requireValue;
     if (!s.canReorder) return Future.value();
-    final inGroup = {for (final p in group) p.id};
     final moved = [...group];
-    moved.insert(newIndex, moved.removeAt(oldIndex));
-    var next = 0;
-    final ids = [
-      for (final p in s.products)
-        inGroup.contains(p.id) ? moved[next++].id : p.id,
-    ];
-    return _apply((repo) => repo.reorder(ids));
+    final product = moved.removeAt(oldIndex);
+    moved.insert(newIndex, product);
+    // One write: the product goes between the rows that are now above and below it.
+    return _apply(
+      (repo) => repo.moveProduct(
+        product.id,
+        above: newIndex > 0 ? moved[newIndex - 1].id : null,
+        below: newIndex < moved.length - 1 ? moved[newIndex + 1].id : null,
+      ),
+    );
   }
 
   /// Returns how many products became needed (those already needed do not count).
@@ -377,7 +451,7 @@ class ListViewModel extends AsyncNotifier<ListState> {
         Failure(:final error) => Failure<void>(error),
       };
     }, flashId: () => addedId);
-    if (shop) _restartIdleTimer(userId);
+    if (shop) _restartIdleTimer(userId, hasMarks: true);
   }
 
   /// "Add products": makes the names needed, see [ListRepository.addProducts]. Returns
@@ -401,7 +475,19 @@ class ListViewModel extends AsyncNotifier<ListState> {
     final ids = [for (final p in state.requireValue.askProducts) p.id];
     await _apply((repo) async {
       final result = await repo.ask(userId, ids);
-      if (result case Ok(:final value)) count = value;
+      if (result case Ok(:final value)) {
+        count = value;
+        // The time of this Ask decides which products the next one announces.
+        final asked = await repo.getAskedAt(userId);
+        if (asked case Ok(:final value) when state.hasValue) {
+          state = AsyncData(
+            state.requireValue.withSession(
+              newSince: state.requireValue.newSince,
+              askedAt: value,
+            ),
+          );
+        }
+      }
       return result;
     });
     return count;
@@ -413,8 +499,9 @@ class ListViewModel extends AsyncNotifier<ListState> {
     ref
         .read(visitTrackerProvider)
         .end(ref.read(currentUserIdProvider), DateTime.now());
-    ref.read(currentUserIdProvider.notifier).select(userId);
-    return refresh();
+    ref.read(userSlotProvider.notifier).select(userId);
+    // The list is built again for the new user.
+    return future.then((_) {});
   }
 
   Future<void> dismissNotices() {
@@ -422,8 +509,23 @@ class ListViewModel extends AsyncNotifier<ListState> {
     return _apply((repo) => repo.markNoticesSeen(userId));
   }
 
-  /// Reloads the lists, for example after the partner's marks changed.
-  Future<void> refresh() => _apply((repo) async => const Ok<void>(null));
+  /// The lists are live and need no reload. This does the checks of a visit: sends a
+  /// trip left from a past day, and counts "New" and the last "Notify" again.
+  Future<void> refresh() async {
+    await future;
+    final repo = ref.read(listRepositoryProvider);
+    _unwrap(
+      await repo.sendStaleTrips(onlyUser: ref.read(currentUserIdProvider)),
+    );
+    final session = await _session(repo, ref.read(currentUserIdProvider));
+    if (!ref.mounted || !state.hasValue) return;
+    state = AsyncData(
+      state.requireValue.withSession(
+        newSince: session.newSince,
+        askedAt: session.askedAt,
+      ),
+    );
+  }
 
   /// Notify: sends my trip and closes it. Returns how many products were sent.
   Future<int> notify() async {

@@ -1,19 +1,18 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/utils/result.dart';
-import '../../core/utils/result_x.dart';
 import '../../domain/models/user_profile.dart';
-import '../services/in_memory_user_service.dart';
-import '../services/service_providers.dart';
+import '../services/identity.dart';
+import '../services/user_service.dart';
 
 /// Display names of users, by user id.
 class UserRepository {
   UserRepository(this._service);
-  final InMemoryUserService _service;
+  final UserService _service;
 
-  Future<Result<Map<String, String>>> getNames() => _service.getProfiles().map(
-    (profiles) => {for (final p in profiles) p.id: p.displayName},
-  );
+  /// Names of these users; a user without a name is missing from the map.
+  Future<Result<Map<String, String>>> getNames(Set<String> userIds) =>
+      _service.getNames(userIds);
 
   Future<Result<void>> deleteProfile(String userId) =>
       _service.deleteProfile(userId);
@@ -27,5 +26,5 @@ class UserRepository {
 }
 
 final userRepositoryProvider = Provider(
-  (ref) => UserRepository(ref.watch(inMemoryUserServiceProvider)),
+  (ref) => UserRepository(ref.watch(userServiceProvider)),
 );

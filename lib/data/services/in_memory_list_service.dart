@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
+import '../../core/utils/new_id.dart';
 import '../../core/utils/result.dart';
 import '../../domain/models/group.dart';
 import '../../domain/models/notice.dart';
@@ -7,9 +10,10 @@ import '../../domain/models/plan.dart';
 import '../../domain/models/product.dart';
 import '../../domain/models/trip.dart';
 import '../../domain/models/trip_mark.dart';
+import 'list_service.dart';
 
 /// Fake storage for the UX stage; replaced by a backend service later.
-class InMemoryListService {
+class InMemoryListService implements ListService {
   /// Debug builds start with the lists of the three seeded groups; release builds
   /// start empty (a new group has no products).
   InMemoryListService({bool? seed}) {
@@ -52,7 +56,7 @@ class InMemoryListService {
         id: '${prefix}seed$i',
         groupId: groupId,
         name: products[i],
-        position: i,
+        position: i.toDouble(),
         planned: planned.contains(products[i]),
       );
     }
@@ -66,6 +70,15 @@ class InMemoryListService {
         createdAt: now.subtract(Duration(days: i + 1)),
         pinned: pinned,
       );
+    }
+    // Seeded usage = how many past trips contained the product.
+    for (final trip in history) {
+      for (final name in trip) {
+        final id = idOf(name);
+        _products[id] = _products[id]!.copyWith(
+          usage: _products[id]!.usage + 1,
+        );
+      }
     }
     for (var i = 0; i < history.length; i++) {
       final at = now.subtract(Duration(days: history.length - i));
@@ -185,71 +198,261 @@ class InMemoryListService {
   /// When each user last asked for products in each group, by `group/user`.
   final Map<String, DateTime> _askedAt = {};
 
+  /// Change signals, `group/kind` (kind: products, trips, plans, notices) or `*`.
+  final _changed = StreamController<String>.broadcast(sync: true);
+  final _errors = StreamController<ListWriteError>.broadcast(sync: true);
+  final _onlineChanges = StreamController<bool>.broadcast(sync: true);
+  bool _isOnline = true;
+
+  /// Test and debug switch: a write shows at once, then, after [ackDelay], the "server"
+  /// refuses it: the data goes back and [writeErrors] reports it.
+  bool failWrites = false;
+  Duration ackDelay = const Duration(seconds: 1);
+
+  /// Test and debug switch: the connection to the "server".
+  void setOnline(bool online) {
+    if (_isOnline == online) return;
+    _isOnline = online;
+    _onlineChanges.add(online);
+  }
+
+  @override
+  Stream<bool> get online =>
+      _stream(() => _isOnline, _onlineChanges.stream, (c, v) => c.add(v));
+
+  @override
+  Stream<ListWriteError> get writeErrors => _errors.stream;
+
+  /// A stream that first emits the current value, then [onEvent] decides what a signal
+  /// of [source] emits.
+  Stream<T> _stream<T, S>(
+    T Function() read,
+    Stream<S> source,
+    void Function(StreamController<T> c, S event) onEvent,
+  ) {
+    StreamSubscription<S>? sub;
+    late final StreamController<T> controller;
+    controller = StreamController<T>(
+      sync: true,
+      onListen: () {
+        controller.add(read());
+        sub = source.listen((event) => onEvent(controller, event));
+      },
+      onCancel: () => sub?.cancel(),
+    );
+    return controller.stream;
+  }
+
+  Stream<Result<List<T>>> _watch<T>(
+    String groupId,
+    String kind,
+    List<T> Function() read,
+  ) => _stream<Result<List<T>>, String>(
+    () => Ok(read()),
+    _changed.stream.where((key) => key == '$groupId/$kind' || key == '*'),
+    (c, _) => c.add(Ok(read())),
+  );
+
+  @override
+  Stream<Result<List<Product>>> watchProducts(String groupId) =>
+      _watch(groupId, 'products', () => _productsOf(groupId));
+
+  @override
+  Stream<Result<List<Trip>>> watchOpenTrips(String groupId) =>
+      _watch(groupId, 'trips', () => _openTripsOf(groupId));
+
+  @override
+  Stream<Result<List<Plan>>> watchPlans(String groupId) =>
+      _watch(groupId, 'plans', () => _plansOf(groupId));
+
+  @override
+  Stream<Result<List<Notice>>> watchNotices(String groupId) =>
+      _watch(groupId, 'notices', () => _noticesOf(groupId));
+
+  List<Product> _productsOf(String groupId) =>
+      _products.values.where((p) => p.groupId == groupId).toList();
+
+  List<Trip> _openTripsOf(String groupId) =>
+      _trips.values.where((t) => t.groupId == groupId && t.isOpen).toList();
+
+  List<Plan> _plansOf(String groupId) =>
+      _plans.values.where((p) => p.groupId == groupId).toList();
+
+  List<Notice> _noticesOf(String groupId) =>
+      _notices.values.where((n) => n.groupId == groupId).toList();
+
+  /// Applies a write locally and tells the listeners; with [failWrites] it is taken
+  /// back later, like a write the server refuses.
+  Result<void> _write(String groupId, String kind, void Function() apply) {
+    final before = failWrites ? _Copy(this) : null;
+    apply();
+    return _finishWrite(groupId, before, [kind]);
+  }
+
+  Result<void> _finishWrite(String groupId, _Copy? before, List<String> kinds) {
+    for (final kind in kinds) {
+      _changed.add('$groupId/$kind');
+    }
+    if (before != null) {
+      Timer(ackDelay, () {
+        before.restore(this);
+        _changed.add('*');
+        _errors.add(ListWriteError(StateError('The server refused the write')));
+      });
+    }
+    return const Ok<void>(null);
+  }
+
+  @override
   Future<Result<DateTime?>> getAskedAt(String groupId, String userId) async =>
       Ok(_askedAt['$groupId/$userId']);
 
-  Future<Result<void>> putAskedAt(
+  @override
+  Future<Result<List<Product>>> getProducts(String groupId) async =>
+      Ok(_productsOf(groupId));
+
+  @override
+  Future<Result<void>> createProduct(Product product) async => _write(
+    product.groupId,
+    'products',
+    () => _products[product.id] = product.copyWith(usage: 0),
+  );
+
+  @override
+  Future<Result<void>> updateProduct(Product product) async => _write(
+    product.groupId,
+    'products',
+    () => _products[product.id] = product,
+  );
+
+  @override
+  Future<Result<void>> updateProducts(List<Product> products) async {
+    if (products.isEmpty) return const Ok<void>(null);
+    return _write(products.first.groupId, 'products', () {
+      for (final p in products) {
+        _products[p.id] = p;
+      }
+    });
+  }
+
+  @override
+  Future<Result<List<Plan>>> getPlans(String groupId) async =>
+      Ok(_plansOf(groupId));
+
+  @override
+  Future<Result<void>> createPlan(Plan plan) async =>
+      _write(plan.groupId, 'plans', () => _plans[plan.id] = plan);
+
+  @override
+  Future<Result<void>> updatePlan(Plan plan) async =>
+      _write(plan.groupId, 'plans', () => _plans[plan.id] = plan);
+
+  @override
+  Future<Result<void>> deletePlan(Plan plan) async =>
+      _write(plan.groupId, 'plans', () => _plans.remove(plan.id));
+
+  @override
+  Future<Result<List<Notice>>> getNotices(String groupId) async =>
+      Ok(_noticesOf(groupId));
+
+  @override
+  Future<Result<void>> markNoticeSeen(Notice notice) async => _write(
+    notice.groupId,
+    'notices',
+    () => _notices[notice.id] = notice.copyWith(seen: true),
+  );
+
+  @override
+  Future<Result<List<Trip>>> getTrips(
+    String groupId, {
+    required int limit,
+  }) async {
+    final all = _trips.values.where((t) => t.groupId == groupId).toList();
+    final sent = all.where((t) => !t.isOpen).toList()
+      ..sort((a, b) => b.sentAt!.compareTo(a.sentAt!));
+    return Ok([...all.where((t) => t.isOpen), ...sent.take(limit)]);
+  }
+
+  @override
+  Future<Result<List<Trip>>> getOpenTrips(String groupId) async =>
+      Ok(_openTripsOf(groupId));
+
+  @override
+  Future<Result<void>> createTrip(Trip trip) async =>
+      _write(trip.groupId, 'trips', () => _trips[trip.id] = trip);
+
+  @override
+  Future<Result<void>> updateTripMarks(Trip trip) async =>
+      _write(trip.groupId, 'trips', () => _trips[trip.id] = trip);
+
+  /// Plays the server's part too: sent planned products leave the plan, count one more
+  /// trip, and every recipient gets a notice.
+  @override
+  Future<Result<void>> closeTrip(
+    Trip trip, {
+    required List<String> notify,
+  }) async {
+    final taken = {for (final m in trip.marks) m.productId};
+    final now = DateTime.now();
+    final before = failWrites ? _Copy(this) : null;
+    _trips[trip.id] = trip.copyWith(sentAt: now);
+    for (final id in taken) {
+      final p = _products[id];
+      if (p != null) {
+        _products[id] = p.copyWith(planned: false, usage: p.usage + 1);
+      }
+    }
+    for (final other in notify) {
+      final notice = Notice(
+        id: newId(),
+        groupId: trip.groupId,
+        toUserId: other,
+        fromUserId: trip.userId,
+        productIds: taken.toList(),
+        sentAt: now,
+      );
+      _notices[notice.id] = notice;
+    }
+    return _finishWrite(trip.groupId, before, ['trips', 'products', 'notices']);
+  }
+
+  @override
+  Future<Result<void>> ask(
     String groupId,
     String userId,
-    DateTime at,
-  ) async {
-    _askedAt['$groupId/$userId'] = at;
+    List<String> productIds, {
+    required List<String> notify,
+  }) async {
+    final now = DateTime.now();
+    for (final other in notify) {
+      final notice = Notice(
+        id: newId(),
+        groupId: groupId,
+        toUserId: other,
+        fromUserId: userId,
+        productIds: productIds,
+        sentAt: now,
+        kind: NoticeKind.needed,
+      );
+      _notices[notice.id] = notice;
+    }
+    _askedAt['$groupId/$userId'] = now;
+    _changed.add('$groupId/notices');
     return const Ok<void>(null);
   }
 
-  Future<Result<List<Product>>> getProducts(String groupId) async =>
-      Ok(_products.values.where((p) => p.groupId == groupId).toList());
-
-  Future<Result<void>> putProduct(Product product) async {
-    _products[product.id] = product;
-    return const Ok<void>(null);
-  }
-
-  Future<Result<List<Plan>>> getPlans(String groupId) async =>
-      Ok(_plans.values.where((p) => p.groupId == groupId).toList());
-
-  Future<Result<void>> putPlan(Plan plan) async {
-    _plans[plan.id] = plan;
-    return const Ok<void>(null);
-  }
-
-  Future<Result<void>> deletePlan(String planId) async {
-    _plans.remove(planId);
-    return const Ok<void>(null);
-  }
-
-  Future<Result<List<Notice>>> getNotices(String groupId) async =>
-      Ok(_notices.values.where((n) => n.groupId == groupId).toList());
-
-  Future<Result<void>> putNotice(Notice notice) async {
-    _notices[notice.id] = notice;
-    return const Ok<void>(null);
-  }
-
-  Future<Result<List<Trip>>> getTrips(String groupId) async =>
-      Ok(_trips.values.where((t) => t.groupId == groupId).toList());
-
-  /// Every open trip of the group: one per user who has unsent marks.
-  Future<Result<List<Trip>>> getOpenTrips(String groupId) async =>
-      Ok(_trips.values.where((t) => t.groupId == groupId && t.isOpen).toList());
-
-  Future<Result<void>> putTrip(Trip trip) async {
-    _trips[trip.id] = trip;
-    return const Ok<void>(null);
-  }
-
-  /// Removes everything the group owns.
+  @override
   Future<Result<void>> deleteGroupData(String groupId) async {
     _products.removeWhere((_, p) => p.groupId == groupId);
     _plans.removeWhere((_, p) => p.groupId == groupId);
     _trips.removeWhere((_, t) => t.groupId == groupId);
     _notices.removeWhere((_, n) => n.groupId == groupId);
     _askedAt.removeWhere((key, _) => key.startsWith('$groupId/'));
+    _changed.add('*');
     return const Ok<void>(null);
   }
 
-  /// A member left: the open trip and the unread notices of that user go; the sent
-  /// trips stay, they are the group's history.
+  @override
   Future<Result<void>> deleteMemberData(String groupId, String userId) async {
     _trips.removeWhere(
       (_, t) => t.groupId == groupId && t.userId == userId && t.isOpen,
@@ -258,6 +461,41 @@ class InMemoryListService {
       (_, n) => n.groupId == groupId && n.toUserId == userId,
     );
     _askedAt.remove('$groupId/$userId');
+    _changed.add('*');
     return const Ok<void>(null);
+  }
+}
+
+/// The stored data at one moment, to put it back when a write is refused.
+class _Copy {
+  _Copy(InMemoryListService s)
+    : products = Map.of(s._products),
+      plans = Map.of(s._plans),
+      trips = Map.of(s._trips),
+      notices = Map.of(s._notices),
+      askedAt = Map.of(s._askedAt);
+
+  final Map<String, Product> products;
+  final Map<String, Plan> plans;
+  final Map<String, Trip> trips;
+  final Map<String, Notice> notices;
+  final Map<String, DateTime> askedAt;
+
+  void restore(InMemoryListService s) {
+    s._products
+      ..clear()
+      ..addAll(products);
+    s._plans
+      ..clear()
+      ..addAll(plans);
+    s._trips
+      ..clear()
+      ..addAll(trips);
+    s._notices
+      ..clear()
+      ..addAll(notices);
+    s._askedAt
+      ..clear()
+      ..addAll(askedAt);
   }
 }

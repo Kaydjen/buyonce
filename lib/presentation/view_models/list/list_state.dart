@@ -258,6 +258,50 @@ class ListState {
   bool get hasUnsent => myMarkIds.isNotEmpty;
   int get plannedCount => products.where((p) => p.planned).length;
 
+  /// New live data of the group; [usage] follows the products.
+  ListState withData({
+    required List<Product> products,
+    required List<Trip> trips,
+    required List<Plan> plans,
+    required List<Notice> notices,
+  }) => ListState(
+    products: products,
+    trips: trips,
+    userId: userId,
+    notices: notices,
+    plans: plans,
+    mode: mode,
+    query: query,
+    finding: finding,
+    autoSendAt: autoSendAt,
+    usage: {for (final p in products) p.id: p.usage},
+    flashId: flashId,
+    pendingFlashId: pendingFlashId,
+    frequentIds: frequentIds,
+    newSince: newSince,
+    askedAt: askedAt,
+  );
+
+  /// The visit facts counted again (see `ListViewModel.refresh`).
+  ListState withSession({DateTime? newSince, DateTime? askedAt}) => ListState(
+    products: products,
+    trips: trips,
+    userId: userId,
+    notices: notices,
+    plans: plans,
+    mode: mode,
+    query: query,
+    finding: finding,
+    autoSendAt: autoSendAt,
+    usage: usage,
+    flashId: flashId,
+    pendingFlashId: pendingFlashId,
+    frequentIds: frequentIds,
+    newSince: newSince,
+    askedAt: askedAt,
+  );
+
+  /// [clearFlash] drops the old blink; a given [flashId] then replaces it.
   ListState copyWith({
     ListMode? mode,
     String? query,
@@ -265,6 +309,7 @@ class ListState {
     DateTime? autoSendAt,
     bool clearAutoSend = false,
     String? flashId,
+    bool clearFlash = false,
     String? pendingFlashId,
     bool clearPending = false,
     bool rankFrequent = false,
@@ -279,7 +324,7 @@ class ListState {
     finding: finding ?? this.finding,
     autoSendAt: clearAutoSend ? null : autoSendAt ?? this.autoSendAt,
     usage: usage,
-    flashId: flashId ?? this.flashId,
+    flashId: flashId ?? (clearFlash ? null : this.flashId),
     pendingFlashId: clearPending ? null : pendingFlashId ?? this.pendingFlashId,
     frequentIds: rankFrequent
         ? [for (final p in liveFrequent) p.id]

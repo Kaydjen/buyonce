@@ -23,6 +23,12 @@ class InMemoryAccountService implements AccountService {
     givenName: _givenNames[userId] ?? 'Guest',
   );
 
+  @override
+  String? get signedInUserId => null;
+
+  @override
+  Stream<String?> get signedInUserIdChanges => const Stream.empty();
+
   /// Tests set this to see the failed re-authentication.
   bool failReauth = false;
 

@@ -27,9 +27,14 @@ class _NameScreenState extends ConsumerState<NameScreen> {
   @override
   void initState() {
     super.initState();
-    final me = ref.read(currentUserIdProvider);
-    final name = ref.read(userNameProvider(me));
-    _text = TextEditingController(text: name == unnamedUser ? '' : name);
+    _text = TextEditingController();
+    // The prefilled name arrives once the names are read; what the user typed stays.
+    ref.listenManual(userNamesProvider, (_, names) {
+      final prefill = names.value?[ref.read(currentUserIdProvider)];
+      if (prefill != null && _text.text.isEmpty) {
+        setState(() => _text.text = prefill);
+      }
+    }, fireImmediately: true);
   }
 
   @override

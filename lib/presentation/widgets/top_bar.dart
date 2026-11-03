@@ -21,6 +21,7 @@ class TopBar extends StatelessWidget {
     required this.menu,
     this.statusKey,
     this.hideStatus = false,
+    this.offline = false,
   });
 
   final bool shop;
@@ -40,6 +41,9 @@ class TopBar extends StatelessWidget {
 
   /// The status is left out: the search icon docked in the bar would cover it.
   final bool hideStatus;
+
+  /// The app cannot reach the server: a small sign shows left of the menu, only then.
+  final bool offline;
 
   @override
   Widget build(BuildContext context) {
@@ -96,6 +100,7 @@ class TopBar extends StatelessWidget {
               style: headerButtonStyle(context),
               child: const Text('Add'),
             ),
+          if (offline) const _OfflineSign(),
           menu,
         ],
       ),
@@ -195,4 +200,19 @@ class TopBar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Icon only, named for screen readers; it is not a button.
+class _OfflineSign extends StatelessWidget {
+  const _OfflineSign();
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: 'Offline',
+    child: Padding(
+      key: const Key('offlineSign'),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Icon(Icons.cloud_off, size: 20, color: context.tokens.muted),
+    ),
+  );
 }

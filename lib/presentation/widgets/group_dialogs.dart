@@ -110,6 +110,15 @@ class _PromptDialogState extends State<PromptDialog> {
   }
 }
 
+/// What the user reads when a group action fails.
+String groupErrorText(Object error) => switch (error) {
+  GroupError.emptyName => 'Enter a name',
+  GroupError.unknownCode => 'No group with this code',
+  GroupError.full => 'This group is full',
+  GroupError.offline => 'No connection',
+  _ => 'Something went wrong',
+};
+
 Future<void> showCreateGroupDialog(BuildContext context, WidgetRef ref) =>
     showCardDialog<void>(
       context,
@@ -121,7 +130,7 @@ Future<void> showCreateGroupDialog(BuildContext context, WidgetRef ref) =>
             .read(groupsViewModelProvider.notifier)
             .create(name)) {
           Ok() => null,
-          Failure() => 'Enter a name',
+          Failure(:final error) => groupErrorText(error),
         },
       ),
     );
@@ -138,7 +147,7 @@ Future<void> showJoinGroupDialog(BuildContext context, WidgetRef ref) =>
             .read(groupsViewModelProvider.notifier)
             .join(code)) {
           Ok() => null,
-          Failure() => 'No group with this code',
+          Failure(:final error) => groupErrorText(error),
         },
       ),
     );
@@ -158,7 +167,7 @@ Future<void> showRenameGroupDialog(
         .read(groupsViewModelProvider.notifier)
         .rename(group.id, name)) {
       Ok() => null,
-      Failure() => 'Enter a name',
+      Failure(:final error) => groupErrorText(error),
     },
   ),
 );

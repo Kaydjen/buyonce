@@ -8,6 +8,7 @@ import 'package:buyonce/domain/models/plan.dart';
 import 'package:buyonce/domain/models/product.dart';
 import 'package:buyonce/domain/models/sort_key.dart';
 import 'package:buyonce/domain/models/trip.dart';
+import 'package:buyonce/domain/models/trip_mark.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// A list repository over fresh seeded services; the group defaults to Home.
@@ -194,5 +195,148 @@ void main() {
     expect((await plans()).length, all.length - 1);
     await repo.restorePlan(plan);
     expect((await plans()).map((p) => p.id), contains(plan.id));
+  });
+
+  group('moving a product', () {
+    Future<List<Product>> products(ListRepository repo) async =>
+        ((await repo.getProducts()) as Ok<List<Product>>).value;
+
+    Future<Product> byName(ListRepository repo, String name) async =>
+        (await products(repo)).firstWhere((p) => p.name == name);
+
+    test('writes one product, between its neighbours', () async {
+      final repo = newRepo();
+      final before = await products(repo);
+      final milk = before[0], bread = before[1], eggs = before[2];
+      await repo.moveProduct(eggs.id, above: milk.id, below: bread.id);
+      final after = await products(repo);
+      expect(after.take(3).map((p) => p.name), ['Milk', 'Eggs', 'Bread']);
+      expect((await byName(repo, 'Eggs')).position, 0.5);
+      for (final p in before.where((p) => p.id != eggs.id)) {
+        expect((await byName(repo, p.name)).position, p.position);
+      }
+    });
+
+    test('to the top and to the bottom', () async {
+      final repo = newRepo();
+      final before = await products(repo);
+      await repo.moveProduct(before.last.id, below: before.first.id);
+      await repo.moveProduct(before[1].id, above: before[before.length - 2].id);
+      final list = await names(repo);
+      expect(list.first, before.last.name);
+      expect(list.last, before[1].name);
+    });
+
+    Future<void> put(
+      InMemoryListService service,
+      String id,
+      double position,
+    ) async {
+      await service.updateProduct(
+        Product(id: id, groupId: defaultGroupId, name: id, position: position),
+      );
+    }
+
+    test('numbers the list again when the gap has run out', () async {
+      final service = InMemoryListService(seed: false);
+      final repo = newRepo(service);
+      await put(service, 'a', 0);
+      await put(service, 'b', minGap / 10);
+      await put(service, 'c', 5);
+      await repo.moveProduct('c', above: 'a', below: 'b');
+      final list = await products(repo);
+      expect(list.map((p) => p.id), ['a', 'c', 'b']);
+      expect(list.map((p) => p.position), [0, 1, 2]);
+    });
+
+    test('equal positions are ordered by id', () async {
+      final service = InMemoryListService(seed: false);
+      final repo = newRepo(service);
+      await put(service, 'b', -1);
+      await put(service, 'a', -1);
+      expect(await names(repo), ['a', 'b']);
+    });
+
+    test('a move between equal neighbours numbers the list again', () async {
+      final service = InMemoryListService(seed: false);
+      final repo = newRepo(service);
+      await put(service, 'a', -1);
+      await put(service, 'b', -1);
+      await put(service, 'c', 3);
+      await repo.moveProduct('c', above: 'a', below: 'b');
+      expect((await products(repo)).map((p) => p.id), ['a', 'c', 'b']);
+    });
+  });
+
+  group('usage counter', () {
+    Future<Map<String, int>> usage(ListRepository repo) async =>
+        ((await repo.getUsage()) as Ok<Map<String, int>>).value;
+
+    Future<String> idOf(ListRepository repo, String name) async =>
+        (((await repo.getProducts()) as Ok<List<Product>>).value)
+            .firstWhere((p) => p.name == name)
+            .id;
+
+    test('seed counts the past trips; getUsage reads products', () async {
+      final repo = newRepo();
+      final u = await usage(repo);
+      expect(u[await idOf(repo, 'Milk')], 6);
+      expect(u[await idOf(repo, 'Salad')], 0);
+    });
+
+    test('a sent trip raises usage of its products by one', () async {
+      final repo = newRepo();
+      final milk = await idOf(repo, 'Milk');
+      final salad = await idOf(repo, 'Salad');
+      await repo.toggleMark(milk, 'me');
+      await repo.sendTrip('me');
+      final u = await usage(repo);
+      expect(u[milk], 7);
+      expect(u[salad], 0);
+    });
+
+    test('a new product starts at 0', () async {
+      final repo = newRepo();
+      final added =
+          (await repo.addProduct('Jam', planned: true) as Ok<Product>).value;
+      expect(added.usage, 0);
+    });
+
+    test('"recent" sort puts the product of the later trip first', () async {
+      final service = InMemoryListService(seed: false);
+      final repo = newRepo(service);
+      for (final id in ['old', 'new']) {
+        await service.updateProduct(
+          Product(
+            id: id,
+            groupId: defaultGroupId,
+            name: id,
+            position: id == 'old' ? 0 : 1,
+          ),
+        );
+      }
+      final base = DateTime(2026, 1, 1);
+      Future<void> trip(String id, int day, String product) =>
+          service.createTrip(
+            Trip(
+              id: id,
+              groupId: defaultGroupId,
+              userId: 'me',
+              startedAt: base.add(Duration(days: day)),
+              sentAt: base.add(Duration(days: day, hours: 1)),
+              marks: [
+                TripMark(
+                  productId: product,
+                  userId: 'me',
+                  markedAt: base.add(Duration(days: day)),
+                ),
+              ],
+            ),
+          );
+      await trip('t0', 0, 'old');
+      await trip('t1', 1, 'new');
+      await repo.sortBy(SortKey.recent);
+      expect(await names(repo), ['new', 'old']);
+    });
   });
 }

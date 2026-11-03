@@ -1,49 +1,53 @@
-import 'dart:math';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/utils/new_id.dart';
 import '../../core/utils/result.dart';
 import '../../core/utils/result_x.dart';
 import '../../domain/models/group.dart';
-import '../services/in_memory_group_service.dart';
-import '../services/in_memory_list_service.dart';
-import '../services/service_providers.dart';
+import '../services/group_service.dart';
+import '../services/list_service.dart';
+import '../services/identity.dart';
 
 /// Groups and their members: create, join by code, rename, remove a member, leave,
 /// delete. Only the owner renames, removes members and deletes.
 class GroupRepository {
   GroupRepository(this._groups, this._lists);
-  final InMemoryGroupService _groups;
-  final InMemoryListService _lists;
+  final GroupService _groups;
+  final ListService _lists;
 
   /// Groups [userId] belongs to, in the order they were created.
   /// The personal list comes first.
   Future<Result<List<Group>>> getGroupsOf(String userId) =>
-      _groups.getGroups().map(
-        (all) => [
-          for (final g in all)
-            if (g.memberIds.contains(userId) && g.personal) _current(g),
-          for (final g in all)
-            if (g.memberIds.contains(userId) && !g.personal) g,
-        ],
+      _groups.getGroups(userId).map(_personalFirst);
+
+  /// The same as [getGroupsOf], live.
+  Stream<Result<List<Group>>> watchGroupsOf(String userId) => _groups
+      .watchGroups(userId)
+      .map(
+        (result) => switch (result) {
+          Ok(:final value) => Ok(_personalFirst(value)),
+          Failure(:final error) => Failure(error),
+        },
       );
+
+  List<Group> _personalFirst(List<Group> all) => [
+    for (final g in all)
+      if (g.personal) _current(g),
+    for (final g in all)
+      if (!g.personal) g,
+  ];
 
   /// The personal list of [userId], created on first use (no invite code, one member).
   Future<Result<Group>> ensurePersonal(String userId) async {
-    final id = personalGroupId(userId);
-    final existing = await getGroup(id);
+    final existing = await getGroup(personalGroupId(userId));
     if (existing is Ok<Group>) return existing;
-    final group = Group(
-      id: id,
+    return (await _groups.create(
+      id: personalGroupId(userId),
       name: 'Personal',
       utcOffset: DateTime.now().timeZoneOffset,
       ownerId: userId,
-      memberIds: [userId],
-      inviteCode: '',
       personal: true,
-    );
-    return (await _groups.putGroup(group)).map((_) => group);
+    )).map(_current);
   }
 
   /// The device's zone may change; a personal list follows it.
@@ -51,12 +55,7 @@ class GroupRepository {
       g.personal ? g.copyWith(utcOffset: DateTime.now().timeZoneOffset) : g;
 
   Future<Result<Group>> getGroup(String groupId) =>
-      _groups.getGroups().andThen((all) async {
-        final found = all.where((g) => g.id == groupId).firstOrNull;
-        return found == null
-            ? const Failure<Group>(GroupError.notFound)
-            : Ok(_current(found));
-      });
+      _groups.getGroup(groupId).map(_current);
 
   /// A new group owned by [userId]; its lists start empty.
   Future<Result<Group>> createGroup(
@@ -66,31 +65,18 @@ class GroupRepository {
   }) async {
     final trimmed = name.trim();
     if (trimmed.isEmpty) return const Failure(GroupError.emptyName);
-    final group = Group(
+    return _groups.create(
       id: newId(),
       name: trimmed,
       utcOffset: utcOffset ?? DateTime.now().timeZoneOffset,
       ownerId: userId,
-      memberIds: [userId],
-      inviteCode: await _freshCode(),
     );
-    return (await _groups.putGroup(group)).map((_) => group);
   }
 
   /// Joins the group with this code (case and spaces are ignored); joining a group the
   /// user is already in changes nothing.
-  Future<Result<Group>> joinByCode(String code, String userId) async {
-    final wanted = code.trim().toUpperCase();
-    return _groups.getGroups().andThen((all) async {
-      final found = wanted.isEmpty
-          ? null
-          : all.where((g) => !g.personal && g.inviteCode == wanted).firstOrNull;
-      if (found == null) return const Failure<Group>(GroupError.unknownCode);
-      if (found.memberIds.contains(userId)) return Ok(found);
-      final joined = found.copyWith(memberIds: [...found.memberIds, userId]);
-      return (await _groups.putGroup(joined)).map((_) => joined);
-    });
-  }
+  Future<Result<Group>> joinByCode(String code, String userId) =>
+      _groups.join(code.trim().toUpperCase(), userId);
 
   Future<Result<void>> rename(String groupId, String actorId, String name) {
     final trimmed = name.trim();
@@ -102,7 +88,7 @@ class GroupRepository {
       actorId,
       (group) async => group.personal
           ? const Failure<void>(GroupError.personalList)
-          : _groups.putGroup(group.copyWith(name: trimmed)),
+          : _groups.rename(groupId, trimmed),
     );
   }
 
@@ -123,8 +109,11 @@ class GroupRepository {
         if (!group.memberIds.contains(userId)) return const Ok<void>(null);
         if (group.memberIds.length == 1) return _delete(groupId);
         final rest = [...group.memberIds]..remove(userId);
-        final next = group.ownerId == userId ? rest.first : group.ownerId;
-        return _drop(group.copyWith(ownerId: next), userId);
+        return _drop(
+          group,
+          userId,
+          newOwnerId: group.ownerId == userId ? rest.first : null,
+        );
       });
 
   Future<Result<void>> delete(String groupId, String actorId) => _asOwner(
@@ -141,17 +130,7 @@ class GroupRepository {
 
   /// Mutes or unmutes the notifications of the group for [userId].
   Future<Result<void>> setMuted(String groupId, String userId, bool muted) =>
-      getGroup(groupId).andThen(
-        (group) => _groups.putGroup(
-          group.copyWith(
-            mutedUserIds: {
-              for (final id in group.mutedUserIds)
-                if (id != userId) id,
-              if (muted) userId,
-            },
-          ),
-        ),
-      );
+      _groups.setMuted(groupId, userId, muted);
 
   Future<Result<void>> _asOwner(
     String groupId,
@@ -163,49 +142,28 @@ class GroupRepository {
         : const Failure<void>(GroupError.notOwner),
   );
 
-  Future<Result<void>> _drop(Group group, String userId) async {
-    final saved = await _groups.putGroup(
-      group.copyWith(
-        memberIds: [
-          for (final id in group.memberIds)
-            if (id != userId) id,
-        ],
-        mutedUserIds: {
-          for (final id in group.mutedUserIds)
-            if (id != userId) id,
-        },
-      ),
-    );
-    if (saved case Failure(:final error)) return Failure(error);
-    return _lists.deleteMemberData(group.id, userId);
+  Future<Result<void>> _drop(
+    Group group,
+    String userId, {
+    String? newOwnerId,
+  }) async {
+    // The data first: once the member is gone the rules no longer let them touch it.
+    final cleared = await _lists.deleteMemberData(group.id, userId);
+    if (cleared case Failure(:final error)) return Failure(error);
+    return _groups.removeMember(group.id, userId, newOwnerId: newOwnerId);
   }
 
   Future<Result<void>> _delete(String groupId) async {
-    final removed = await _groups.deleteGroup(groupId);
-    if (removed case Failure(:final error)) return Failure(error);
-    return _lists.deleteGroupData(groupId);
-  }
-
-  /// Six characters without the look-alikes 0, O, 1, I.
-  Future<String> _freshCode() async {
-    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    final random = Random();
-    final taken = ((await _groups.getGroups()) as Ok<List<Group>>).value
-        .map((g) => g.inviteCode)
-        .toSet();
-    while (true) {
-      final code = String.fromCharCodes([
-        for (var i = 0; i < 6; i++)
-          alphabet.codeUnitAt(random.nextInt(alphabet.length)),
-      ]);
-      if (!taken.contains(code)) return code;
-    }
+    // The data first: once the group is gone nobody may read or delete it.
+    final cleared = await _lists.deleteGroupData(groupId);
+    if (cleared case Failure(:final error)) return Failure(error);
+    return _groups.delete(groupId);
   }
 }
 
 final groupRepositoryProvider = Provider(
   (ref) => GroupRepository(
-    ref.watch(inMemoryGroupServiceProvider),
-    ref.watch(inMemoryListServiceProvider),
+    ref.watch(groupServiceProvider),
+    ref.watch(listServiceProvider),
   ),
 );

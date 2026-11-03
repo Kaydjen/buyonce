@@ -183,12 +183,14 @@ service cloud.firestore {
       }
 
       // One document per trip of one user: only that user writes it, and only while open.
-      // `marks.<productId>` = when the product was taken.
+      // `marks.<productId>` = when the product was taken. `open` is true until the trip is
+      // sent (a query cannot ask for a missing `sentAt`, it can ask for `open == true`).
       match /trips/{tid} {
         allow read: if isMember(gid);
 
         allow create: if isMember(gid)
-          && request.resource.data.keys().hasOnly(['userId', 'startedAt', 'marks', 'autoSendAt'])
+          && request.resource.data.keys().hasOnly(['userId', 'startedAt', 'marks', 'autoSendAt', 'open'])
+          && request.resource.data.open == true
           && request.resource.data.userId == me()
           && request.resource.data.startedAt == request.time
           && request.resource.data.marks is map
@@ -200,11 +202,13 @@ service cloud.firestore {
         allow update: if isMember(gid)
           && resource.data.userId == me()
           && unset(resource.data, 'sentAt')
-          && changed().hasOnly(['marks', 'autoSendAt', 'sentAt'])
+          && changed().hasOnly(['marks', 'autoSendAt', 'sentAt', 'open'])
           && request.resource.data.marks is map
           && request.resource.data.marks.size() <= 200
           && (!('autoSendAt' in request.resource.data) || request.resource.data.autoSendAt is timestamp)
-          && (!('sentAt' in changed()) || request.resource.data.sentAt == request.time);
+          && ('sentAt' in changed()
+            ? request.resource.data.sentAt == request.time && request.resource.data.open == false
+            : !('open' in changed()));
 
         allow delete: if isMember(gid)
           && ((resource.data.userId == me() && unset(resource.data, 'sentAt')) || isGroupOwner(gid));

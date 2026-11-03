@@ -1,5 +1,6 @@
 import 'package:buyonce/presentation/view_models/groups/groups_view_model.dart';
 import 'package:buyonce/presentation/widgets/notice_banner.dart';
+import 'package:buyonce/core/utils/result.dart';
 import 'package:buyonce/data/repositories/list_repository.dart';
 import 'package:buyonce/data/services/in_memory_group_service.dart';
 import 'package:buyonce/data/services/in_memory_list_service.dart';
@@ -231,18 +232,13 @@ void main() {
     expect(find.text('Alex'), findsOneWidget);
     expect(find.text('Anna'), findsOneWidget);
     expect(find.text('Owner · You'), findsOneWidget);
-    expect(find.text('HOME01'), findsOneWidget);
+    expect(find.text('HOME0001'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('muteGroup')));
     await tester.pumpAndSettle();
     final muted = containerOf(tester).read(inMemoryGroupServiceProvider);
-    final groups = (await muted.getGroups()) as dynamic;
-    expect(
-      (groups.value as List<Group>)
-          .firstWhere((g) => g.id == 'home')
-          .mutedUserIds,
-      {'me'},
-    );
+    final home = (await muted.getGroup('home')) as Ok<Group>;
+    expect(home.value.mutedUserIds, {'me'});
   });
 
   testWidgets('settings: rename', (tester) async {

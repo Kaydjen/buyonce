@@ -6,12 +6,11 @@ import '../../../domain/models/account.dart';
 import '../../../domain/use_cases/delete_account_use_case.dart';
 import '../../../domain/use_cases/sign_in_use_case.dart';
 import '../session/session.dart';
-import '../users/user_names_view_model.dart';
 
 /// The sign-in of the current user; null when signed out.
 class AccountViewModel extends AsyncNotifier<Account?> {
   @override
-  Future<Account?> build() => _load(ref.watch(currentUserIdProvider));
+  Future<Account?> build() => _load(ref.watch(userSlotProvider));
 
   Future<Account?> _load(String userId) async =>
       switch (await ref.read(accountRepositoryProvider).getAccount(userId)) {
@@ -19,19 +18,16 @@ class AccountViewModel extends AsyncNotifier<Account?> {
         Failure(:final error) => throw error,
       };
 
-  String get _userId => ref.read(currentUserIdProvider);
+  /// The account calls name the fake slot; the backend id comes back in the account.
+  String get _userId => ref.read(userSlotProvider);
 
   /// A user who had no name before gets the name screen once, prefilled by the sign-in.
   Future<Result<void>> signIn() async {
     final userId = _userId;
-    final hadName = (await ref.read(userNamesProvider.future))
-        .containsKey(userId);
     final result = await ref.read(signInUseCaseProvider)(userId);
-    if (result is Ok<void>) {
-      // The name screen reads the prefilled name, so the names must be loaded first.
-      ref.invalidate(userNamesProvider);
-      await ref.read(userNamesProvider.future);
-      ref.read(namePendingProvider.notifier).set(!hadName);
+    if (result case Ok(:final value)) {
+      // The names reload themselves when the account state below changes.
+      ref.read(namePendingProvider.notifier).set(value);
       state = AsyncData(await _load(userId));
     }
     return result;
@@ -64,11 +60,13 @@ class AccountViewModel extends AsyncNotifier<Account?> {
   /// Fails with [AccountError.reauthFailed] when Google does not confirm. On success the groups
   /// and names are read again: the user is left with an empty personal list.
   Future<Result<void>> deleteAccount() async {
-    final result = await ref.read(deleteAccountUseCaseProvider)(_userId);
+    final result = await ref.read(deleteAccountUseCaseProvider)(
+      _userId,
+      ref.read(currentUserIdProvider),
+    );
     if (result is Ok<void>) {
       ref.read(localModeProvider.notifier).set(true);
       ref.read(selectedGroupIdProvider.notifier).select(null);
-      ref.invalidate(userNamesProvider);
       state = AsyncData(await _load(_userId));
     }
     return result;

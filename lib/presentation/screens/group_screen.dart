@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_tokens.dart';
+import '../../core/utils/result.dart';
 import '../../domain/models/group.dart';
 import '../view_models/groups/groups_view_model.dart';
 import '../view_models/session/session.dart';
@@ -93,13 +94,18 @@ class GroupScreen extends ConsumerWidget {
                 children: [
                   Row(
                     children: [
-                      Text(
-                        group.inviteCode,
-                        key: const Key('inviteCode'),
-                        style: Theme.of(context).textTheme.headlineSmall!
-                            .copyWith(letterSpacing: 4),
+                      Expanded(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            group.inviteCode,
+                            key: const Key('inviteCode'),
+                            style: Theme.of(context).textTheme.headlineSmall!
+                                .copyWith(letterSpacing: 4),
+                          ),
+                        ),
                       ),
-                      const Spacer(),
                       IconButton(
                         key: const Key('copyCode'),
                         tooltip: 'Copy code',
@@ -157,7 +163,11 @@ class GroupScreen extends ConsumerWidget {
       confirm: 'Remove $name',
       keep: 'Keep $name',
     );
-    if (sure) await vm.removeMember(group.id, memberId);
+    if (!sure) return;
+    final result = await vm.removeMember(group.id, memberId);
+    if (result case Failure(:final error) when context.mounted) {
+      showToast(context, groupErrorText(error));
+    }
   }
 
   Future<void> _leave(
@@ -173,8 +183,13 @@ class GroupScreen extends ConsumerWidget {
       keep: 'Stay',
     );
     if (!sure) return;
-    await vm.leave(group.id);
-    if (context.mounted) Navigator.of(context).pop();
+    final result = await vm.leave(group.id);
+    if (!context.mounted) return;
+    if (result case Failure(:final error)) {
+      showToast(context, groupErrorText(error));
+    } else {
+      Navigator.of(context).pop();
+    }
   }
 
   Future<void> _delete(
@@ -190,7 +205,12 @@ class GroupScreen extends ConsumerWidget {
       keep: 'Keep group',
     );
     if (!sure) return;
-    await vm.delete(group.id);
-    if (context.mounted) Navigator.of(context).pop();
+    final result = await vm.delete(group.id);
+    if (!context.mounted) return;
+    if (result case Failure(:final error)) {
+      showToast(context, groupErrorText(error));
+    } else {
+      Navigator.of(context).pop();
+    }
   }
 }

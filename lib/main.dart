@@ -6,6 +6,9 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 import 'core/theme/app_theme.dart';
 import 'data/services/firebase_account_service.dart';
+import 'data/services/firebase_group_service.dart';
+import 'data/services/firebase_list_service.dart';
+import 'data/services/firebase_user_service.dart';
 import 'data/services/service_providers.dart';
 import 'domain/models/app_settings.dart';
 import 'presentation/view_models/settings/style_variant_view_model.dart';
@@ -26,6 +29,9 @@ Future<void> main() async {
     ProviderScope(
       overrides: [
         realAccountServiceProvider.overrideWithValue(FirebaseAccountService()),
+        realGroupServiceProvider.overrideWithValue(FirebaseGroupService()),
+        realListServiceProvider.overrideWithValue(FirebaseListService()),
+        realUserServiceProvider.overrideWithValue(FirebaseUserService()),
       ],
       child: const BuyOnceApp(),
     ),

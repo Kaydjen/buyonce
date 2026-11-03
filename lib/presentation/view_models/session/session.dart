@@ -1,18 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../domain/models/group.dart';
-
-/// Fake signed-in user for the UX stage; the debug menu switches it.
-class CurrentUserId extends Notifier<String> {
-  @override
-  String build() => groupUserIds.first;
-
-  void select(String userId) => state = userId;
-}
-
-final currentUserIdProvider = NotifierProvider<CurrentUserId, String>(
-  CurrentUserId.new,
-);
+export '../../../data/services/identity.dart'
+    show currentUserIdProvider, realUserIdProvider, userSlotProvider;
 
 /// Sessions of the users, in memory, to tell which products are "new" for a user: the
 /// ones another member made needed after this user's previous session ended. A session

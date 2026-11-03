@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { after, before, beforeEach, describe, it } from 'node:test';
 import {
@@ -14,6 +15,9 @@ import {
   doc,
   getDoc,
   getDocs,
+  increment,
+  limit,
+  orderBy,
   query,
   serverTimestamp,
   setDoc,
@@ -55,10 +59,10 @@ beforeEach(async () => {
       name: 'Milk', position: 1, planned: false, usage: 3,
     });
     await setDoc(doc(db, 'groups/g1/trips/t-alice'), {
-      userId: 'alice', startedAt: now, marks: { milk: now }, autoSendAt: now,
+      userId: 'alice', startedAt: now, marks: { milk: now }, autoSendAt: now, open: true,
     });
     await setDoc(doc(db, 'groups/g1/trips/t-sent'), {
-      userId: 'bob', startedAt: now, marks: {}, sentAt: now, finalizedAt: now, pushedAt: now,
+      userId: 'bob', startedAt: now, marks: {}, sentAt: now, finalizedAt: now, pushedAt: now, open: false,
     });
     await setDoc(doc(db, 'groups/g1/notices/n1'), {
       toUserId: 'bob', fromUserId: 'alice', productIds: ['milk'], sentAt: now, kind: 'bought', seen: false,
@@ -286,6 +290,107 @@ describe('leave, remove, ownership, delete', () => {
   });
 });
 
+describe('the exact sequences of the app (step 59.2)', () => {
+  it('join: the joiner cannot read the group, so the counter goes up by increment(1)', async () => {
+    const db = as('carol');
+    await assertFails(getDoc(doc(db, 'groups/g1')));
+    await assertFails(getDoc(doc(db, 'groups/g1/members/carol')));
+    const b = writeBatch(db);
+    b.set(doc(db, 'groups/g1/members/carol'), {
+      userId: 'carol', joinedAt: serverTimestamp(), muted: false, joinCode: CODE,
+    });
+    b.update(doc(db, 'groups/g1'), { memberCount: increment(1) });
+    await assertSucceeds(b.commit());
+    await assertSucceeds(getDoc(doc(db, 'groups/g1')));
+  });
+
+  it('join as a transaction-like pair is refused for a member who is in already', async () => {
+    const db = as('bob');
+    const b = writeBatch(db);
+    b.set(doc(db, 'groups/g1/members/bob'), {
+      userId: 'bob', joinedAt: serverTimestamp(), muted: false, joinCode: CODE,
+    });
+    b.update(doc(db, 'groups/g1'), { memberCount: increment(1) });
+    await assertFails(b.commit());
+  });
+
+  it('join of a full group is refused with increment(1)', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), 'groups/g1'), { memberCount: 20 });
+    });
+    const db = as('carol');
+    const b = writeBatch(db);
+    b.set(doc(db, 'groups/g1/members/carol'), {
+      userId: 'carol', joinedAt: serverTimestamp(), muted: false, joinCode: CODE,
+    });
+    b.update(doc(db, 'groups/g1'), { memberCount: increment(1) });
+    await assertFails(b.commit());
+  });
+
+  it('a member leaves with increment(-1)', async () => {
+    const db = as('bob');
+    const b = writeBatch(db);
+    b.delete(doc(db, 'groups/g1/members/bob'));
+    b.update(doc(db, 'groups/g1'), { memberCount: increment(-1) });
+    await assertSucceeds(b.commit());
+  });
+
+  it('the owner leaves: ownership to bob, own member deleted, counter down, one batch', async () => {
+    const db = as('alice');
+    const b = writeBatch(db);
+    b.update(doc(db, 'groups/g1'), { ownerId: 'bob', memberCount: increment(-1) });
+    b.delete(doc(db, 'groups/g1/members/alice'));
+    await assertSucceeds(b.commit());
+    await assertSucceeds(updateDoc(doc(as('bob'), 'groups/g1'), { name: 'Bobs now' }));
+  });
+
+  it('the owner removes a member and lowers the counter in one batch', async () => {
+    const db = as('alice');
+    const b = writeBatch(db);
+    b.update(doc(db, 'groups/g1'), { memberCount: increment(-1) });
+    b.delete(doc(db, 'groups/g1/members/bob'));
+    await assertSucceeds(b.commit());
+  });
+
+  it('the owner deletes members, the code and the group in one batch; a member cannot', async () => {
+    const mine = as('bob');
+    const denied = writeBatch(mine);
+    denied.delete(doc(mine, 'groups/g1/members/alice'));
+    denied.delete(doc(mine, 'groups/g1'));
+    await assertFails(denied.commit());
+
+    const db = as('alice');
+    const b = writeBatch(db);
+    b.delete(doc(db, 'groups/g1/members/alice'));
+    b.delete(doc(db, 'groups/g1/members/bob'));
+    b.delete(doc(db, 'joinCodes', CODE));
+    b.delete(doc(db, 'groups/g1'));
+    await assertSucceeds(b.commit());
+  });
+
+  it('the last member of a personal list deletes it with its member', async () => {
+    const db = as('carol');
+    const make = writeBatch(db);
+    make.set(doc(db, 'groups/personal-carol'), {
+      name: 'Personal', utcOffsetMin: 0, ownerId: 'carol', personal: true,
+      memberCount: 1, createdAt: serverTimestamp(),
+    });
+    make.set(doc(db, 'groups/personal-carol/members/carol'), {
+      userId: 'carol', joinedAt: serverTimestamp(), muted: false,
+    });
+    await assertSucceeds(make.commit());
+    const b = writeBatch(db);
+    b.delete(doc(db, 'groups/personal-carol/members/carol'));
+    b.delete(doc(db, 'groups/personal-carol'));
+    await assertSucceeds(b.commit());
+  });
+
+  it('rename and mute are single writes', async () => {
+    await assertSucceeds(updateDoc(doc(as('alice'), 'groups/g1'), { name: 'Our home' }));
+    await assertSucceeds(updateDoc(doc(as('bob'), 'groups/g1/members/bob'), { muted: true }));
+  });
+});
+
 describe('member settings', () => {
   it('a member changes only own mute and asked time', async () => {
     await assertSucceeds(updateDoc(doc(as('bob'), 'groups/g1/members/bob'), { muted: true }));
@@ -339,12 +444,15 @@ describe('products', () => {
 describe('trips', () => {
   it('a member starts only own trip, with server time and no worker fields', async () => {
     const db = as('bob');
-    const trip = { userId: 'bob', startedAt: serverTimestamp(), marks: { milk: Timestamp.now() } };
+    const trip = { userId: 'bob', startedAt: serverTimestamp(), marks: { milk: Timestamp.now() }, open: true };
     await assertSucceeds(setDoc(doc(db, 'groups/g1/trips/t-bob'), trip));
     await assertFails(setDoc(doc(db, 'groups/g1/trips/t2'), { ...trip, userId: 'alice' }));
     await assertFails(setDoc(doc(db, 'groups/g1/trips/t2'), { ...trip, startedAt: Timestamp.fromMillis(0) }));
     await assertFails(setDoc(doc(db, 'groups/g1/trips/t2'), { ...trip, pushedAt: serverTimestamp() }));
     await assertFails(setDoc(doc(db, 'groups/g1/trips/t2'), { ...trip, sentAt: serverTimestamp() }));
+    await assertFails(setDoc(doc(db, 'groups/g1/trips/t2'), { ...trip, open: false }));
+    const { open, ...withoutOpen } = trip;
+    await assertFails(setDoc(doc(db, 'groups/g1/trips/t2'), withoutOpen));
   });
 
   it('the owner of an open trip changes marks and the auto-send time', async () => {
@@ -366,7 +474,9 @@ describe('trips', () => {
     await assertFails(updateDoc(d, { finalizedAt: serverTimestamp() }));
     await assertFails(updateDoc(d, { userId: 'bob' }));
     await assertFails(updateDoc(d, { sentAt: Timestamp.fromMillis(0) }));
-    await assertSucceeds(updateDoc(d, { sentAt: serverTimestamp(), autoSendAt: Timestamp.fromMillis(Date.now() + 120_000) }));
+    await assertFails(updateDoc(d, { sentAt: serverTimestamp() }));
+    await assertFails(updateDoc(d, { open: false }));
+    await assertSucceeds(updateDoc(d, { sentAt: serverTimestamp(), open: false, autoSendAt: Timestamp.fromMillis(Date.now() + 120_000) }));
   });
 
   it('a sent trip is history: no client edits it or deletes it', async () => {
@@ -384,6 +494,73 @@ describe('trips', () => {
   it('members read trips, the cron query is not for clients', async () => {
     await assertSucceeds(getDoc(doc(as('bob'), 'groups/g1/trips/t-alice')));
     await assertFails(getDocs(query(collectionGroup(as('bob'), 'trips'), where('autoSendAt', '<=', Timestamp.now()))));
+  });
+});
+
+describe('trips as the app uses them (step 60)', () => {
+  it('members list the open trips of the group with open == true', async () => {
+    const q = query(collection(as('bob'), 'groups/g1/trips'), where('open', '==', true));
+    const snap = await assertSucceeds(getDocs(q));
+    assert.deepEqual(snap.docs.map((d) => d.id), ['t-alice']);
+  });
+
+  it('members read the latest sent trips ordered by sentAt', async () => {
+    const q = query(collection(as('bob'), 'groups/g1/trips'), orderBy('sentAt', 'desc'), limit(5));
+    const snap = await assertSucceeds(getDocs(q));
+    assert.deepEqual(snap.docs.map((d) => d.id), ['t-sent']);
+  });
+
+  it('send as one batch: the trip closes and the planned flags of its products clear', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), 'groups/g1/products/milk'), {
+        planned: true, plannedBy: 'bob', plannedAt: Timestamp.now(),
+      });
+    });
+    const db = as('alice');
+    const b = writeBatch(db);
+    b.update(doc(db, 'groups/g1/trips/t-alice'), { sentAt: serverTimestamp(), open: false });
+    b.update(doc(db, 'groups/g1/products/milk'), {
+      planned: false, plannedBy: deleteField(), plannedAt: deleteField(),
+    });
+    await assertSucceeds(b.commit());
+  });
+
+  it('a member lists only own notices, nobody lists the notices of others', async () => {
+    const own = query(collection(as('bob'), 'groups/g1/notices'), where('toUserId', '==', 'bob'));
+    await assertSucceeds(getDocs(own));
+    await assertFails(getDocs(collection(as('bob'), 'groups/g1/notices')));
+    await assertFails(getDocs(query(collection(as('alice'), 'groups/g1/notices'), where('toUserId', '==', 'bob'))));
+  });
+
+  it('asking stamps the own member document with server time', async () => {
+    await assertSucceeds(updateDoc(doc(as('bob'), 'groups/g1/members/bob'), { askedAt: serverTimestamp() }));
+  });
+
+  it('a plan is pinned without touching its date, and refreshed with server time', async () => {
+    const d = doc(as('bob'), 'groups/g1/plans/p1');
+    await assertSucceeds(updateDoc(d, { pinned: true }));
+    await assertSucceeds(updateDoc(d, { pinned: false, createdAt: serverTimestamp() }));
+  });
+
+  it('the owner empties the group: products, trips, plans', async () => {
+    const db = as('alice');
+    const b = writeBatch(db);
+    b.delete(doc(db, 'groups/g1/products/milk'));
+    b.delete(doc(db, 'groups/g1/trips/t-alice'));
+    b.delete(doc(db, 'groups/g1/trips/t-sent'));
+    b.delete(doc(db, 'groups/g1/plans/p1'));
+    await assertSucceeds(b.commit());
+  });
+
+  it('a leaving member removes the own notices and the own open trip first', async () => {
+    const db = as('bob');
+    await assertSucceeds(deleteDoc(doc(db, 'groups/g1/notices/n1')));
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'groups/g1/trips/t-bob'), {
+        userId: 'bob', startedAt: Timestamp.now(), marks: {}, open: true,
+      });
+    });
+    await assertSucceeds(deleteDoc(doc(db, 'groups/g1/trips/t-bob')));
   });
 });
 

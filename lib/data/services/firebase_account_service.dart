@@ -14,6 +14,13 @@ class FirebaseAccountService implements AccountService {
   final FirebaseAuth _auth;
   final GoogleSignIn _google;
 
+  @override
+  String? get signedInUserId => _auth.currentUser?.uid;
+
+  @override
+  Stream<String?> get signedInUserIdChanges =>
+      _auth.authStateChanges().map((user) => user?.uid);
+
   static Account _accountOf(User user) => Account(
     userId: user.uid,
     email: user.email ?? '',

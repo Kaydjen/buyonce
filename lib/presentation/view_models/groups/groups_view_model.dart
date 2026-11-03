@@ -5,17 +5,44 @@ import '../../../data/repositories/group_repository.dart';
 import '../../../data/repositories/list_repository.dart';
 import '../../../domain/models/group.dart';
 import '../account/account_view_model.dart';
+import '../../../data/services/identity.dart';
+import '../list/sync_state.dart';
 import '../session/session.dart';
 
 /// The groups of the signed-in user. Every action reloads the list and moves the
 /// selection when it has to (a new group is shown at once, a left group is not).
 class GroupsViewModel extends AsyncNotifier<List<Group>> {
   @override
-  Future<List<Group>> build() => _load(
-    ref.watch(groupRepositoryProvider),
-    ref.watch(currentUserIdProvider),
-    ref.watch(accountViewModelProvider.select((a) => a.value != null)),
-  );
+  Future<List<Group>> build() async {
+    final repo = ref.watch(groupRepositoryProvider);
+    final userId = ref.watch(currentUserIdProvider);
+    final signedIn = ref.watch(
+      accountViewModelProvider.select((a) => a.value != null),
+    );
+    final first = await _load(repo, userId, signedIn);
+    // From here the groups follow the server: a member who joins or leaves, a rename
+    // on another phone.
+    final subscriptions = [
+      repo.watchGroupsOf(userId).skip(1).listen((result) {
+        if (result case Ok(:final value)) {
+          state = AsyncData(_visible(value, signedIn));
+        }
+      }),
+      ref
+          .read(groupServiceProvider)
+          .writeErrors
+          .listen((_) => ref.read(writeFailuresProvider.notifier).report()),
+    ];
+    ref.onDispose(() {
+      for (final s in subscriptions) {
+        s.cancel();
+      }
+    });
+    return first;
+  }
+
+  static List<Group> _visible(List<Group> all, bool signedIn) =>
+      signedIn ? all : all.where((g) => g.personal).toList();
 
   /// Every user has a personal list, created here on first use. Without an account
   /// (local mode) only the personal list is shown: groups are online.
@@ -27,8 +54,7 @@ class GroupsViewModel extends AsyncNotifier<List<Group>> {
     final ensured = await repo.ensurePersonal(userId);
     if (ensured case Failure(:final error)) throw error;
     return switch (await repo.getGroupsOf(userId)) {
-      Ok(:final value) =>
-        signedIn ? value : value.where((g) => g.personal).toList(),
+      Ok(:final value) => _visible(value, signedIn),
       Failure(:final error) => throw error,
     };
   }

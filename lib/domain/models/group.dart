@@ -57,7 +57,21 @@ class Group {
 }
 
 /// Why a group action failed.
-enum GroupError { notFound, unknownCode, notOwner, emptyName, personalList }
+enum GroupError {
+  notFound,
+  unknownCode,
+  notOwner,
+  emptyName,
+  personalList,
+  full,
+
+  /// The server cannot be reached (or answered too late).
+  offline,
+  failed,
+}
+
+/// A group holds at most this many members (the security rules enforce it too).
+const maxGroupMembers = 20;
 
 /// DEBUG: hour of the group's local day at which the Bought list is cleared (0 = midnight).
 /// Raise it to the current hour on the phone to see marks made earlier disappear.

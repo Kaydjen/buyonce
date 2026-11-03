@@ -17,11 +17,13 @@ class DeleteAccountUseCase {
   final GroupRepository _groups;
   final UserRepository _users;
 
-  Future<Result<void>> call(String userId) async {
+  /// [slot] names the user for the account calls, [userId] is the backend id that owns
+  /// the groups, the list and the profile.
+  Future<Result<void>> call(String slot, String userId) async {
     final mine = await _groups.getGroupsOf(userId);
     if (mine case Failure(:final error)) return Failure(error);
     final groups = (mine as Ok<List<Group>>).value;
-    final confirmed = await _accounts.reauthenticate(userId);
+    final confirmed = await _accounts.reauthenticate(slot);
     if (confirmed case Failure(:final error)) return Failure(error);
 
     for (final g in groups.where((g) => !g.personal)) {
@@ -32,7 +34,7 @@ class DeleteAccountUseCase {
     if (personal case Failure(:final error)) return Failure(error);
     final profile = await _users.deleteProfile(userId);
     if (profile case Failure(:final error)) return Failure(error);
-    return _accounts.deleteAccount(userId);
+    return _accounts.deleteAccount(slot);
   }
 }
 

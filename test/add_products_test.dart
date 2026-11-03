@@ -155,8 +155,8 @@ void main() {
         .requireValue
         .products
         .map((p) => p.name.toLowerCase());
-    // The view model state is not reloaded by a direct repository call.
-    expect(names.where((n) => n == 'pears'), isEmpty);
+    // The lists are live: a direct repository write shows in the state at once.
+    expect(names.where((n) => n == 'pears'), hasLength(1));
     await container.read(listViewModelProvider.notifier).refresh();
     final after = container
         .read(listViewModelProvider)

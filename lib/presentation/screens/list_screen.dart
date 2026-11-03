@@ -14,6 +14,8 @@ import '../view_models/account/account_view_model.dart';
 import '../view_models/groups/groups_view_model.dart';
 import '../view_models/list/list_state.dart';
 import '../view_models/list/list_view_model.dart';
+import '../view_models/list/sync_state.dart';
+import '../view_models/session/session.dart';
 import '../view_models/update/update_view_model.dart';
 import '../view_models/users/user_names_view_model.dart';
 import '../widgets/debug_user_sheet.dart';
@@ -539,6 +541,11 @@ class _ListScreenState extends ConsumerState<ListScreen>
     final async = ref.watch(listViewModelProvider);
     final vm = ref.read(listViewModelProvider.notifier);
     final float = context.tokens.floatTabs;
+    // A write that was shown and then refused: the list is back to the real data.
+    ref.listen(
+      writeFailuresProvider,
+      (_, _) => showToast(context, "Couldn't save, try again"),
+    );
     return Scaffold(
       body: Stack(
         children: [
@@ -672,7 +679,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
     final top = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (kDebugMode && s.userId != groupUserIds.first)
+        if (kDebugMode && ref.watch(userSlotProvider) != groupUserIds.first)
           Container(
             height: 20,
             width: double.infinity,
@@ -959,6 +966,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
           onGroup: _switchGroup,
           onGroupLongPress: kDebugMode ? () => _debugUser(s.userId) : null,
           onAdd: shop ? null : _addProducts,
+          offline: ref.watch(offlineProvider),
           menu: _menu(s, menuLabel),
         ),
       ),

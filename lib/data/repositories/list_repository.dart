@@ -11,37 +11,60 @@ import '../../domain/models/purchase.dart';
 import '../../domain/models/sort_key.dart';
 import '../../domain/models/trip.dart';
 import '../../domain/models/trip_mark.dart';
-import '../services/in_memory_list_service.dart';
-import '../services/service_providers.dart';
+import '../services/list_service.dart';
+import '../services/identity.dart';
 import 'group_repository.dart';
 
 class ListRepository {
   ListRepository(this._service, this._groups, {this.groupId = defaultGroupId});
-  final InMemoryListService _service;
+  final ListService _service;
   final GroupRepository _groups;
   final String groupId;
 
-  Future<Result<List<Product>>> getProducts() => _service
-      .getProducts(groupId)
-      .map(
-        (products) =>
-            [...products]..sort((a, b) => a.position.compareTo(b.position)),
-      );
+  Future<Result<List<Product>>> getProducts() =>
+      _service.getProducts(groupId).map(_inCatalogOrder);
+
+  static List<Product> _inCatalogOrder(List<Product> products) =>
+      [...products]..sort(byPosition);
+
+  static List<Plan> _templatesFirst(List<Plan> plans) =>
+      [...plans]..sort((a, b) {
+        if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+        return b.createdAt.compareTo(a.createdAt);
+      });
+
+  static List<Notice> Function(List<Notice>) _unseenFor(String userId) =>
+      (all) =>
+          all.where((n) => n.toUserId == userId && !n.seen).toList()
+            ..sort((a, b) => a.sentAt.compareTo(b.sentAt));
+
+  /// Live data of the group (see [ListService]): the current value first, then every
+  /// change, my own writes included, before the server has answered.
+  Stream<Result<List<Product>>> watchProducts() =>
+      _service.watchProducts(groupId).map((r) => r.map(_inCatalogOrder));
+
+  Stream<Result<List<Trip>>> watchOpenTrips() =>
+      _service.watchOpenTrips(groupId);
+
+  Stream<Result<List<Plan>>> watchPlans() =>
+      _service.watchPlans(groupId).map((r) => r.map(_templatesFirst));
+
+  Stream<Result<List<Notice>>> watchNotices(String userId) =>
+      _service.watchNotices(groupId).map((r) => r.map(_unseenFor(userId)));
+
+  /// Writes (of any group) that were shown and then refused.
+  Stream<ListWriteError> get writeErrors => _service.writeErrors;
+
+  /// False while the app cannot reach the server.
+  Stream<bool> get online => _service.online;
 
   /// Open trips of the whole group: my marks and the partner's.
   Future<Result<List<Trip>>> getOpenTrips() => _service.getOpenTrips(groupId);
 
   /// How many sent trips contained each product.
-  Future<Result<Map<String, int>>> getUsage() =>
-      _service.getTrips(groupId).map((trips) {
-        final count = <String, int>{};
-        for (final trip in trips.where((t) => !t.isOpen)) {
-          for (final m in trip.marks) {
-            count[m.productId] = (count[m.productId] ?? 0) + 1;
-          }
-        }
-        return count;
-      });
+  Future<Result<Map<String, int>>> getUsage() => _service
+      .getProducts(groupId)
+      .map((products) => {for (final p in products) p.id: p.usage});
 
   /// Every mark of every trip, sent or still open, newest first. A mark that was taken
   /// back is not in the trip any more, so it is not here.
@@ -51,7 +74,7 @@ class ListRepository {
     final names = {
       for (final p in (products as Ok<List<Product>>).value) p.id: p.name,
     };
-    return _service.getTrips(groupId).map((trips) {
+    return _service.getTrips(groupId, limit: historyTripLimit).map((trips) {
       final all = [
         for (final trip in trips)
           for (final m in trip.marks)
@@ -75,8 +98,8 @@ class ListRepository {
     String? userId,
   }) => _service.getProducts(groupId).andThen((products) async {
     final position = atStart
-        ? products.fold(0, (m, p) => p.position < m ? p.position : m) - 1
-        : products.fold(-1, (m, p) => p.position > m ? p.position : m) + 1;
+        ? products.fold(0.0, (m, p) => p.position < m ? p.position : m) - 1
+        : products.fold(-1.0, (m, p) => p.position > m ? p.position : m) + 1;
     final product = Product(
       id: newId(),
       groupId: groupId,
@@ -86,7 +109,7 @@ class ListRepository {
       plannedBy: planned ? userId : null,
       plannedAt: planned ? DateTime.now() : null,
     );
-    return (await _service.putProduct(product)).map((_) => product);
+    return (await _service.createProduct(product)).map((_) => product);
   });
 
   /// Makes [names] needed, the first name on top. A catalog name just becomes needed, a
@@ -132,7 +155,7 @@ class ListRepository {
     Product product,
     bool planned,
     String userId,
-  ) => _service.putProduct(
+  ) => _service.updateProduct(
     product.copyWith(
       planned: planned,
       plannedBy: userId,
@@ -141,38 +164,28 @@ class ListRepository {
   );
 
   /// Pinned plans (templates) first, then the newest.
-  Future<Result<List<Plan>>> getPlans() => _service
-      .getPlans(groupId)
-      .map(
-        (plans) => [...plans]
-          ..sort((a, b) {
-            if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
-            return b.createdAt.compareTo(a.createdAt);
-          }),
-      );
+  Future<Result<List<Plan>>> getPlans() =>
+      _service.getPlans(groupId).map(_templatesFirst);
 
+  /// Makes the plan's products needed, in one write.
   Future<Result<void>> applyPlan(Plan plan, String userId) =>
-      _service.getProducts(groupId).andThen((products) async {
+      _service.getProducts(groupId).andThen((products) {
         final byId = {for (final p in products) p.id: p};
         final now = DateTime.now();
-        for (final id in plan.productIds) {
-          final p = byId[id];
-          if (p == null || p.planned) continue;
-          final saved = await _service.putProduct(
-            p.copyWith(planned: true, plannedBy: userId, plannedAt: now),
-          );
-          if (saved case Failure(:final error)) return Failure(error);
-        }
-        return const Ok<void>(null);
+        return _service.updateProducts([
+          for (final id in plan.productIds)
+            if (byId[id] case final p? when !p.planned)
+              p.copyWith(planned: true, plannedBy: userId, plannedAt: now),
+        ]);
       });
 
-  Future<Result<void>> deletePlan(Plan plan) => _service.deletePlan(plan.id);
+  Future<Result<void>> deletePlan(Plan plan) => _service.deletePlan(plan);
 
   /// Undo of [deletePlan]: the same plan comes back.
-  Future<Result<void>> restorePlan(Plan plan) => _service.putPlan(plan);
+  Future<Result<void>> restorePlan(Plan plan) => _service.createPlan(plan);
 
   Future<Result<void>> setPinned(Plan plan, bool pinned) =>
-      _service.putPlan(plan.copyWith(pinned: pinned));
+      _service.updatePlan(plan.copyWith(pinned: pinned));
 
   /// Saves the set of sent products as a plan; an identical set only refreshes its date.
   Future<Result<void>> _recordPlan(List<String> ids) async {
@@ -187,60 +200,92 @@ class ListRepository {
           )
           .firstOrNull;
       final now = DateTime.now();
-      return _service.putPlan(
-        same?.copyWith(createdAt: now) ??
-            Plan(
-              id: newId(),
-              groupId: groupId,
-              productIds: ids,
-              createdAt: now,
-            ),
-      );
+      return same == null
+          ? _service.createPlan(
+              Plan(
+                id: newId(),
+                groupId: groupId,
+                productIds: ids,
+                createdAt: now,
+              ),
+            )
+          : _service.updatePlan(same.copyWith(createdAt: now));
     });
   }
 
-  /// Stores the given product order as manual positions.
+  /// Stores the given product order as manual positions 0, 1, 2... (one write per
+  /// product that changes). Used by the one-off sort and when a gap has run out.
   Future<Result<void>> reorder(List<String> orderedIds) =>
-      _service.getProducts(groupId).andThen((products) async {
+      _service.getProducts(groupId).andThen((products) {
         final byId = {for (final p in products) p.id: p};
-        for (var i = 0; i < orderedIds.length; i++) {
-          final p = byId[orderedIds[i]];
-          if (p == null || p.position == i) continue;
-          final saved = await _service.putProduct(p.copyWith(position: i));
-          if (saved case Failure(:final error)) return Failure(error);
-        }
-        return const Ok<void>(null);
+        return _service.updateProducts([
+          for (var i = 0; i < orderedIds.length; i++)
+            if (byId[orderedIds[i]] case final p? when p.position != i)
+              p.copyWith(position: i.toDouble()),
+        ]);
       });
+
+  /// Moves one product between its new neighbours: [above] is the product that will be
+  /// right above it, [below] the one right below (null at the ends). One write: the
+  /// position becomes the middle of the neighbours. When the neighbours are not apart
+  /// ([minGap]), the whole list is numbered again once.
+  Future<Result<void>> moveProduct(
+    String productId, {
+    String? above,
+    String? below,
+  }) => _service.getProducts(groupId).andThen((products) {
+    final sorted = [...products]..sort(byPosition);
+    final byId = {for (final p in sorted) p.id: p};
+    final moved = byId[productId];
+    if (moved == null) return Future.value(const Ok<void>(null));
+    final top = above == null ? null : byId[above]?.position;
+    final bottom = below == null ? null : byId[below]?.position;
+    final double position;
+    if (top != null && bottom != null) {
+      if (bottom - top < minGap) {
+        final ids = [for (final p in sorted) p.id]..remove(productId);
+        ids.insert(ids.indexOf(above!) + 1, productId);
+        return reorder(ids);
+      }
+      position = (top + bottom) / 2;
+    } else if (top != null) {
+      position = top + 1;
+    } else if (bottom != null) {
+      position = bottom - 1;
+    } else {
+      return Future.value(const Ok<void>(null));
+    }
+    return _service.updateProduct(moved.copyWith(position: position));
+  });
 
   /// One-time sort: reorders by [key]; the result is the new manual order.
   Future<Result<void>> sortBy(
     SortKey key,
   ) => _service.getProducts(groupId).andThen((products) {
-    return _service.getTrips(groupId).andThen((trips) {
-      final sent = trips.where((t) => !t.isOpen);
-      final count = <String, int>{};
+    return _service.getTrips(groupId, limit: recentTripLimit).andThen((trips) {
+      // `usage` counts every sent trip; "recent" looks only at the latest ones.
+      final sent = trips.where((t) => !t.isOpen).toList()
+        ..sort((a, b) => b.sentAt!.compareTo(a.sentAt!));
       final last = <String, DateTime>{};
-      for (final trip in sent) {
+      for (final trip in sent.take(recentTripLimit)) {
         for (final m in trip.marks) {
-          count[m.productId] = (count[m.productId] ?? 0) + 1;
           final seen = last[m.productId];
           if (seen == null || m.markedAt.isAfter(seen)) {
             last[m.productId] = m.markedAt;
           }
         }
       }
-      final sorted = [...products]
-        ..sort((a, b) => a.position.compareTo(b.position));
+      final sorted = [...products]..sort(byPosition);
       final old = DateTime.fromMillisecondsSinceEpoch(0);
       // List.sort is not stable, so ties are broken by the previous position.
-      int tie(Product a, Product b) => a.position.compareTo(b.position);
+      int tie(Product a, Product b) => byPosition(a, b);
       sorted.sort(switch (key) {
         SortKey.alphabet => (a, b) {
           final c = a.name.toLowerCase().compareTo(b.name.toLowerCase());
           return c != 0 ? c : tie(a, b);
         },
         SortKey.frequency => (a, b) {
-          final c = (count[b.id] ?? 0).compareTo(count[a.id] ?? 0);
+          final c = b.usage.compareTo(a.usage);
           return c != 0 ? c : tie(a, b);
         },
         SortKey.recent => (a, b) {
@@ -253,18 +298,13 @@ class ListRepository {
   });
 
   /// Notices this user has not dismissed yet, oldest first.
-  Future<Result<List<Notice>>> getNotices(String userId) => _service
-      .getNotices(groupId)
-      .map(
-        (all) =>
-            all.where((n) => n.toUserId == userId && !n.seen).toList()
-              ..sort((a, b) => a.sentAt.compareTo(b.sentAt)),
-      );
+  Future<Result<List<Notice>>> getNotices(String userId) =>
+      _service.getNotices(groupId).map(_unseenFor(userId));
 
   Future<Result<void>> markNoticesSeen(String userId) =>
       _service.getNotices(groupId).andThen((all) async {
         for (final n in all.where((n) => n.toUserId == userId && !n.seen)) {
-          final saved = await _service.putNotice(n.copyWith(seen: true));
+          final saved = await _service.markNoticeSeen(n);
           if (saved case Failure(:final error)) return Failure(error);
         }
         return const Ok<void>(null);
@@ -285,22 +325,12 @@ class ListRepository {
     };
     final others = members.where((u) => u != userId).toList();
     if (others.isEmpty) return const Ok(0);
-    final now = DateTime.now();
-    for (final other in others) {
-      final told = await _service.putNotice(
-        Notice(
-          id: newId(),
-          groupId: groupId,
-          toUserId: other,
-          fromUserId: userId,
-          productIds: productIds,
-          sentAt: now,
-          kind: NoticeKind.needed,
-        ),
-      );
-      if (told case Failure(:final error)) return Failure(error);
-    }
-    final saved = await _service.putAskedAt(groupId, userId, now);
+    final saved = await _service.ask(
+      groupId,
+      userId,
+      productIds,
+      notify: others,
+    );
     if (saved case Failure(:final error)) return Failure(error);
     return Ok(productIds.length);
   }
@@ -320,7 +350,7 @@ class ListRepository {
                 ...trip.marks,
                 TripMark(productId: productId, userId: userId, markedAt: now),
               ];
-        return _service.putTrip(trip.copyWith(marks: marks));
+        return _saveTrip(open, trip.copyWith(marks: marks));
       });
 
   /// Adds the user's marks for [productIds] (those already marked stay as they are)
@@ -346,19 +376,27 @@ class ListRepository {
                 TripMark(productId: id, userId: userId, markedAt: now),
           ]
         : kept;
-    return _service.putTrip(trip.copyWith(marks: marks));
+    return _saveTrip(open, trip.copyWith(marks: marks));
   });
+
+  /// The first mark creates the trip, later ones replace its marks.
+  Future<Result<void>> _saveTrip(Trip? open, Trip trip) =>
+      open == null ? _service.createTrip(trip) : _service.updateTripMarks(trip);
 
   /// Daily clearing of Bought: an open trip whose last mark is older than the start of
   /// today in the group's zone is sent first (the partner is notified), so its marks
   /// leave the list. A trip with a mark from today stays whole. History is kept.
-  Future<Result<void>> sendStaleTrips({DateTime? now}) =>
+  /// With [onlyUser] only that user's trip is sent: on the server nobody writes the trip
+  /// of another member, the partner's stale trip is sent by their own phone (and by the
+  /// server's clock, step 61).
+  Future<Result<void>> sendStaleTrips({DateTime? now, String? onlyUser}) =>
       _groups.getGroup(groupId).andThen<void>((group) async {
         final trips = await _service.getOpenTrips(groupId);
         if (trips case Failure(:final error)) return Failure(error);
         final boundary = dayStart(now ?? DateTime.now(), group.utcOffset);
         for (final trip in (trips as Ok<List<Trip>>).value) {
           if (trip.marks.isEmpty) continue;
+          if (onlyUser != null && trip.userId != onlyUser) continue;
           if (trip.marks.any((m) => !m.markedAt.isBefore(boundary))) continue;
           final sent = await sendTrip(trip.userId);
           if (sent case Failure(:final error)) return Failure(error);
@@ -366,16 +404,14 @@ class ListRepository {
         return const Ok<void>(null);
       });
 
-  /// Closes the user's open trip; sent planned products leave the plan. Returns how many were sent.
+  /// Closes the user's open trip; sent planned products leave the plan. Returns how
+  /// many were sent. The service closes the trip and, as the server's part, counts the
+  /// usage and tells the other members; the plan is saved here.
   Future<Result<int>> sendTrip(String userId) =>
       _service.getOpenTrips(groupId).andThen<int>((trips) async {
         final open = trips.where((t) => t.userId == userId).firstOrNull;
         if (open == null || open.marks.isEmpty) return const Ok(0);
         final taken = {for (final m in open.marks) m.productId};
-        final sent = await _service.putTrip(
-          open.copyWith(sentAt: DateTime.now()),
-        );
-        if (sent case Failure(:final error)) return Failure(error);
         final products = await _service.getProducts(groupId);
         if (products case Failure(:final error)) return Failure(error);
         final all = (products as Ok<List<Product>>).value;
@@ -384,39 +420,34 @@ class ListRepository {
           Ok(:final value) => value.memberIds,
           Failure() => const <String>[],
         };
-        for (final other in members.where((u) => u != userId)) {
-          final told = await _service.putNotice(
-            Notice(
-              id: newId(),
-              groupId: groupId,
-              toUserId: other,
-              fromUserId: userId,
-              productIds: taken.toList(),
-              sentAt: DateTime.now(),
-            ),
-          );
-          if (told case Failure(:final error)) return Failure(error);
-        }
+        final sent = await _service.closeTrip(
+          open,
+          notify: [
+            for (final u in members)
+              if (u != userId) u,
+          ],
+        );
+        if (sent case Failure(:final error)) return Failure(error);
         final recorded = await _recordPlan([
-          for (final p in [
-            ...all,
-          ]..sort((a, b) => a.position.compareTo(b.position)))
+          for (final p in [...all]..sort(byPosition))
             if (taken.contains(p.id)) p.id,
         ]);
         if (recorded case Failure(:final error)) return Failure(error);
-        for (final p in all) {
-          if (!p.planned || !taken.contains(p.id)) continue;
-          final saved = await _service.putProduct(p.copyWith(planned: false));
-          if (saved case Failure(:final error)) return Failure(error);
-        }
         return Ok(taken.length);
       });
 }
 
+/// How many of the latest sent trips the one-off "recent" sort looks at.
+const recentTripLimit = 50;
+
+/// How many of the latest sent trips the history screen reads (one query, so the free
+/// plan's daily reads are not spent on old trips).
+const historyTripLimit = 200;
+
 /// A repository of one given group, also for a group that is not shown now.
 final listRepositoryForProvider = Provider.family<ListRepository, String>(
   (ref, groupId) => ListRepository(
-    ref.watch(inMemoryListServiceProvider),
+    ref.watch(listServiceProvider),
     ref.watch(groupRepositoryProvider),
     groupId: groupId,
   ),

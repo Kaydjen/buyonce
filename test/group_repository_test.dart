@@ -48,7 +48,7 @@ void main() {
     expect(group.name, 'Cabin');
     expect(group.ownerId, 'me');
     expect(group.memberIds, ['me']);
-    expect(group.inviteCode, hasLength(6));
+    expect(group.inviteCode, hasLength(8));
     expect(ok(await e.lists(group.id).getProducts()), isEmpty);
     expect(ok(await e.groups.getGroupsOf('partner')), isEmpty);
   });
@@ -79,13 +79,44 @@ void main() {
     );
   });
 
-  test('the group has no member limit', () async {
+  test('a group holds up to 20 members, the next join fails', () async {
     final e = env();
     final group = ok(await e.groups.createGroup('Big', 'u0'));
-    for (var i = 1; i < 12; i++) {
-      await e.groups.joinByCode(group.inviteCode, 'u$i');
+    for (var i = 1; i < maxGroupMembers; i++) {
+      ok(await e.groups.joinByCode(group.inviteCode, 'u$i'));
     }
-    expect(ok(await e.groups.getGroup(group.id)).memberIds, hasLength(12));
+    expect(
+      ok(await e.groups.getGroup(group.id)).memberIds,
+      hasLength(maxGroupMembers),
+    );
+    expect(
+      fail(await e.groups.joinByCode(group.inviteCode, 'late')),
+      GroupError.full,
+    );
+    expect(ok(await e.groups.joinByCode(group.inviteCode, 'u3')).id, group.id);
+  });
+
+  test('watching groups emits now and after every change', () async {
+    final e = env();
+    final seen = <List<String>>[];
+    final sub = e.groups
+        .watchGroupsOf('me')
+        .listen((r) => seen.add([for (final g in ok(r)) g.name]));
+    await pumpEventQueue();
+    await e.groups.createGroup('Cabin', 'me');
+    await pumpEventQueue();
+    final group = ok(await e.groups.getGroupsOf('me')).single;
+    await e.groups.rename(group.id, 'me', 'Lodge');
+    await pumpEventQueue();
+    await e.groups.leave(group.id, 'me');
+    await pumpEventQueue();
+    await sub.cancel();
+    expect(seen, [
+      [],
+      ['Cabin'],
+      ['Lodge'],
+      [],
+    ]);
   });
 
   test('only the owner renames, removes members and deletes', () async {
