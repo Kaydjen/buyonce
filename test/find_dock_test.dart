@@ -1,8 +1,8 @@
 import 'package:buyonce/core/theme/style_variant.dart';
 import 'package:buyonce/main.dart';
+import 'package:buyonce/presentation/view_models/settings/style_variant_view_model.dart';
 import 'package:buyonce/presentation/widgets/edge_fade.dart';
 import 'package:buyonce/presentation/widgets/titled_card.dart';
-import 'package:buyonce/presentation/view_models/settings/style_variant_view_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';

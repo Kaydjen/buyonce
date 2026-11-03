@@ -7,9 +7,10 @@ import 'package:flutter/physics.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/theme/app_tokens.dart';
 import '../../domain/models/group.dart';
 import '../../domain/models/product.dart';
-import '../../core/theme/app_tokens.dart';
+import '../../l10n/l10n.dart';
 import '../view_models/account/account_view_model.dart';
 import '../view_models/groups/groups_view_model.dart';
 import '../view_models/list/list_state.dart';
@@ -18,34 +19,34 @@ import '../view_models/list/sync_state.dart';
 import '../view_models/session/session.dart';
 import '../view_models/update/update_view_model.dart';
 import '../view_models/users/user_names_view_model.dart';
+import '../widgets/accent_dot.dart';
+import '../widgets/card_action.dart';
+import '../widgets/card_menu.dart';
+import '../widgets/card_title.dart';
 import '../widgets/debug_user_sheet.dart';
 import '../widgets/edge_fade.dart';
-import '../widgets/load_failed.dart';
 import '../widgets/flash_on_add.dart';
 import '../widgets/group_dialogs.dart';
 import '../widgets/group_sheet.dart';
 import '../widgets/haptics.dart';
+import '../widgets/inset.dart';
+import '../widgets/load_failed.dart';
+import '../widgets/mode_bar.dart';
+import '../widgets/notice_banner.dart';
+import '../widgets/panel.dart';
+import '../widgets/plain_button.dart';
+import '../widgets/plans_sheet.dart';
+import '../widgets/product_row.dart';
+import '../widgets/raised_icon.dart';
+import '../widgets/send_button.dart';
+import '../widgets/sign_in_prompt.dart';
+import '../widgets/sort_sheet.dart';
+import '../widgets/toast.dart';
+import '../widgets/top_bar.dart';
 import 'add_products_screen.dart';
 import 'group_screen.dart';
 import 'history_screen.dart';
 import 'settings_screen.dart';
-import '../widgets/notice_banner.dart';
-import '../widgets/accent_dot.dart';
-import '../widgets/card_action.dart';
-import '../widgets/card_menu.dart';
-import '../widgets/toast.dart';
-import '../widgets/card_title.dart';
-import '../widgets/mode_bar.dart';
-import '../widgets/inset.dart';
-import '../widgets/panel.dart';
-import '../widgets/plain_button.dart';
-import '../widgets/raised_icon.dart';
-import '../widgets/send_button.dart';
-import '../widgets/top_bar.dart';
-import '../widgets/product_row.dart';
-import '../widgets/plans_sheet.dart';
-import '../widgets/sign_in_prompt.dart';
-import '../widgets/sort_sheet.dart';
 
 class ListScreen extends ConsumerStatefulWidget {
   const ListScreen({super.key});
@@ -389,7 +390,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
           )
         : const Icon(Icons.search);
     return Tooltip(
-      message: 'Search',
+      message: context.l10n.search,
       child: GestureDetector(
         key: const Key('findDock'),
         behavior: HitTestBehavior.opaque,
@@ -445,7 +446,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
         curve: Curves.easeOutCubic,
       );
     }
-    showToast(context, 'Added: $changed');
+    showToast(context, context.l10n.addedCount(changed));
   }
 
   /// Takes everything still open; the snackbar can take it back.
@@ -455,26 +456,27 @@ class _ListScreenState extends ConsumerState<ListScreen>
     if (!mounted || ids.isEmpty) return;
     showToast(
       context,
-      'Marked: ${ids.length}',
-      actionLabel: 'Undo',
+      context.l10n.markedCount(ids.length),
+      actionLabel: context.l10n.undo,
       onAction: () => vm.undoMarkAll(ids),
     );
   }
 
   Future<void> _notify() async {
     Haptics.send(context);
-    final word = _isPersonal ? 'Done' : 'Sent';
+    final l10n = context.l10n;
+    String word(int n) => _isPersonal ? l10n.doneCount(n) : l10n.sentCount(n);
     // The confirmation appears with the press, not after the answer: the marks leave the
     // state at once, and the button would start to slide out before it could confirm.
     final expected =
         ref.read(listViewModelProvider).value?.myMarkIds.length ?? 0;
-    _confirmSent(ask: false, text: '$word $expected', count: expected);
+    _confirmSent(ask: false, text: word(expected), count: expected);
     final count = await ref.read(listViewModelProvider.notifier).notify();
     if (!mounted) return;
     if (count == 0) {
       _clearSent();
     } else if (count != expected) {
-      _confirmSent(ask: false, text: '$word $count', count: count);
+      _confirmSent(ask: false, text: word(count), count: count);
     }
   }
 
@@ -496,13 +498,13 @@ class _ListScreenState extends ConsumerState<ListScreen>
     Haptics.send(context);
     final expected =
         ref.read(listViewModelProvider).value?.askProducts.length ?? 0;
-    _confirmSent(ask: true, text: 'Notified $expected', count: expected);
+    _confirmSent(ask: true, text: context.l10n.notifiedCount(expected), count: expected);
     final count = await ref.read(listViewModelProvider.notifier).ask();
     if (!mounted) return;
     if (count == 0) {
       _clearSent();
     } else if (count != expected) {
-      _confirmSent(ask: true, text: 'Notified $count', count: count);
+      _confirmSent(ask: true, text: context.l10n.notifiedCount(count), count: count);
     }
   }
 
@@ -528,6 +530,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
     s.notices,
     s.products,
     (userId) => ref.watch(userNameProvider(userId)),
+    l10n: context.l10n,
   );
 
   bool get _signedIn => ref.read(accountViewModelProvider).value != null;
@@ -572,7 +575,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
     // A write that was shown and then refused: the list is back to the real data.
     ref.listen(
       writeFailuresProvider,
-      (_, _) => showToast(context, "Couldn't save, try again"),
+      (_, _) => showToast(context, context.l10n.couldntSave),
     );
     return Scaffold(
       body: Stack(
@@ -673,7 +676,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
         count: s.myMarkIds.length,
         autoSendAt: s.autoSendAt,
         onSend: _notify,
-        label: _isPersonal ? 'Done' : 'Send',
+        label: _isPersonal ? context.l10n.done : context.l10n.send,
       ),
       SendButton(
         buttonKey: const Key('askButton'),
@@ -685,7 +688,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
         count: s.askProducts.length,
         autoSendAt: null,
         onSend: _ask,
-        label: 'Notify',
+        label: context.l10n.notify,
       ),
     ],
   );
@@ -747,7 +750,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
               _card(
                 key: const Key('toBuyCard'),
                 title: CardTitle(
-                  'To buy',
+                  context.l10n.toBuy,
                   trailing: _markAllButton(s, s.toBuy, const Key('markAll')),
                 ),
                 body: _group(
@@ -771,7 +774,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
                         child: _field(s, vm),
                       )
                     : CardTitle(
-                        'Frequent',
+                        context.l10n.frequent,
                         trailing: KeyedSubtree(
                           key: _findKey,
                           child: ValueListenableBuilder<bool>(
@@ -782,7 +785,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
                               key: const Key('findButton'),
                               onPressed: _openFind,
                               icon: Icons.search,
-                              label: 'Search',
+                              label: context.l10n.search,
                             ),
                           ),
                         ),
@@ -825,7 +828,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
                         child: _field(s, vm),
                       )
                     : CardTitle(
-                        'Select',
+                        context.l10n.select,
                         trailing: KeyedSubtree(
                           key: _findKey,
                           child: ValueListenableBuilder<bool>(
@@ -836,7 +839,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
                               key: const Key('findButton'),
                               onPressed: _openFind,
                               icon: Icons.search,
-                              label: 'Search',
+                              label: context.l10n.search,
                             ),
                           ),
                         ),
@@ -880,7 +883,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
       width: double.infinity,
       child: PlainButton(
         key: const Key('emptyAdd'),
-        label: 'Add products',
+        label: context.l10n.addProductsTitle,
         onPressed: _addProducts,
       ),
     ),
@@ -893,7 +896,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
       width: double.infinity,
       child: PlainButton(
         key: const Key('addNew'),
-        label: 'Add "${s.query.trim()}"',
+        label: context.l10n.addQuery(s.query.trim()),
         onPressed: () => _add(s.query),
       ),
     ),
@@ -910,9 +913,9 @@ class _ListScreenState extends ConsumerState<ListScreen>
         focusNode: _searchFocus,
         autofocus: true,
         decoration: InputDecoration(
-          hintText: shop ? 'Find' : 'Search',
+          hintText: shop ? context.l10n.find : context.l10n.search,
           suffixIcon: IconButton(
-            tooltip: 'Close search',
+            tooltip: context.l10n.closeSearch,
             onPressed: () => _closeField(s),
             icon: const Icon(Icons.close),
           ),
@@ -940,7 +943,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
   Widget _presence(ListState s) {
     final text = [
       for (final e in s.othersTaken.entries)
-        '${ref.watch(userNameProvider(e.key))} shopping, ${e.value} taken',
+        context.l10n.shoppingTaken(ref.watch(userNameProvider(e.key)), e.value),
     ].join(' · ');
     return Padding(
       key: const Key('presence'),
@@ -970,8 +973,8 @@ class _ListScreenState extends ConsumerState<ListScreen>
     final shop = s.mode == ListMode.buy;
     final menuLabel =
         ref.watch(updateViewModelProvider.select((u) => u.hasUpdate))
-        ? 'Menu, update available'
-        : 'Menu';
+        ? context.l10n.menuUpdateAvailable
+        : context.l10n.menu;
     final activeId = ref.watch(activeGroupIdProvider);
     final name =
         ref
@@ -1021,13 +1024,13 @@ class _ListScreenState extends ConsumerState<ListScreen>
     final picked = await showCardMenu<String>(
       context,
       items: [
-        if (!shop) const CardMenuItem('sort', 'Sort'),
+        if (!shop) CardMenuItem('sort', context.l10n.sort),
         if (!shop && s.plans.isNotEmpty)
-          const CardMenuItem('plans', 'Templates'),
-        const CardMenuItem('history', 'History'),
+          CardMenuItem('plans', context.l10n.templates),
+        CardMenuItem('history', context.l10n.history),
         CardMenuItem(
           'settings',
-          'Settings',
+          context.l10n.settings,
           trailing: ref.read(updateViewModelProvider).hasUpdate
               ? const AccentDot(key: Key('settingsUpdateDot'))
               : null,
@@ -1059,7 +1062,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
     final authors = {for (final p in s.newProducts) _nameOf(p.plannedBy)}
         .where((n) => n.isNotEmpty)
         .join(', ');
-    return authors.isEmpty ? 'New' : 'New · $authors';
+    return authors.isEmpty ? context.l10n.newLabel : context.l10n.newBy(authors);
   }
 
   /// "Mark all" of one card: takes that card's products nobody has taken yet; null
@@ -1070,7 +1073,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
       : CardTextAction(
           key: key,
           onPressed: () => _markAll(card),
-          label: 'Mark all',
+          label: context.l10n.markAll,
         );
 
   /// Plan: the "New" group, one label, then plain rows that are tapped in place; no
@@ -1164,13 +1167,13 @@ class _ListScreenState extends ConsumerState<ListScreen>
         showDivider: divider,
         onTap: () {
           if (mark == RowMark.partner) {
-            _hintTaken('${_nameOf(s.partnerOf(p.id))} already bought this');
+            _hintTaken(context.l10n.alreadyBoughtBy(_nameOf(s.partnerOf(p.id))));
             return;
           }
           // Plan never unmarks: a product that vanished from the trip would
           // raise "where did it go".
           if (plan && mark == RowMark.mine) {
-            _hintTaken('You already bought this');
+            _hintTaken(context.l10n.youAlreadyBought);
             return;
           }
           if (s.mode == ListMode.buy) {

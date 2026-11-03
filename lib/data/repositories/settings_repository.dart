@@ -12,6 +12,7 @@ class SettingsRepository {
   static const _autoSendSeconds = 'autoSendSeconds';
   static const _theme = 'theme';
   static const _textScale = 'textScale';
+  static const _language = 'language';
   static const _localMode = 'localMode';
 
   /// Whether the user chose to use the app without an account; null if never chosen
@@ -32,12 +33,14 @@ class SettingsRepository {
     final seconds = await _service.getInt(_autoSendSeconds);
     final theme = await _service.getString(_theme);
     final scale = await _service.getString(_textScale);
-    for (final r in [enabled, seconds, theme, scale]) {
+    final language = await _service.getString(_language);
+    for (final r in [enabled, seconds, theme, scale, language]) {
       if (r case Failure(:final error)) return Failure(error);
     }
     final storedSeconds = (seconds as Ok<int?>).value;
     final storedTheme = (theme as Ok<String?>).value;
     final storedScale = (scale as Ok<String?>).value;
+    final storedLanguage = (language as Ok<String?>).value;
     return Ok(
       AppSettings(
         autoSendEnabled:
@@ -53,6 +56,10 @@ class SettingsRepository {
           (t) => t.name == storedScale,
           orElse: () => defaults.textScale,
         ),
+        language: LanguageChoice.values.firstWhere(
+          (t) => t.name == storedLanguage,
+          orElse: () => defaults.language,
+        ),
       ),
     );
   }
@@ -63,6 +70,7 @@ class SettingsRepository {
       await _service.setInt(_autoSendSeconds, settings.autoSendSeconds),
       await _service.setString(_theme, settings.theme.name),
       await _service.setString(_textScale, settings.textScale.name),
+      await _service.setString(_language, settings.language.name),
     ];
     for (final r in results) {
       if (r case Failure(:final error)) return Failure(error);

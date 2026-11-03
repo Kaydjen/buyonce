@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/theme/app_tokens.dart';
 import '../../core/utils/result.dart';
 import '../../domain/models/group.dart';
-import '../../core/theme/app_tokens.dart';
+import '../../l10n/l10n.dart';
 import '../view_models/groups/groups_view_model.dart';
 import 'card_dialog.dart';
 import 'inset.dart';
@@ -98,7 +99,7 @@ class _PromptDialogState extends State<PromptDialog> {
         ],
       ),
       cancel: PlainButton(
-        label: 'Cancel',
+        label: context.l10n.cancel,
         onPressed: () => Navigator.of(context).pop(),
       ),
       confirm: PlainButton(
@@ -111,66 +112,72 @@ class _PromptDialogState extends State<PromptDialog> {
 }
 
 /// What the user reads when a group action fails.
-String groupErrorText(Object error) => switch (error) {
-  GroupError.emptyName => 'Enter a name',
-  GroupError.unknownCode => 'No group with this code',
-  GroupError.full => 'This group is full',
-  GroupError.offline => 'No connection',
-  _ => 'Something went wrong',
+String groupErrorText(AppLocalizations l10n, Object error) => switch (error) {
+  GroupError.emptyName => l10n.enterName,
+  GroupError.unknownCode => l10n.noGroupWithCode,
+  GroupError.full => l10n.groupFull,
+  GroupError.offline => l10n.noConnection,
+  _ => l10n.somethingWrong,
 };
 
-Future<void> showCreateGroupDialog(BuildContext context, WidgetRef ref) =>
-    showCardDialog<void>(
-      context,
-      builder: (_) => PromptDialog(
-        title: 'New group',
-        hint: 'Group name',
-        confirm: 'Create',
-        onSubmit: (name) async => switch (await ref
-            .read(groupsViewModelProvider.notifier)
-            .create(name)) {
-          Ok() => null,
-          Failure(:final error) => groupErrorText(error),
-        },
-      ),
-    );
+Future<void> showCreateGroupDialog(BuildContext context, WidgetRef ref) {
+  final l10n = context.l10n;
+  return showCardDialog<void>(
+    context,
+    builder: (_) => PromptDialog(
+      title: l10n.newGroup,
+      hint: l10n.groupNameHint,
+      confirm: l10n.create,
+      onSubmit: (name) async => switch (await ref
+          .read(groupsViewModelProvider.notifier)
+          .create(name)) {
+        Ok() => null,
+        Failure(:final error) => groupErrorText(l10n, error),
+      },
+    ),
+  );
+}
 
-Future<void> showJoinGroupDialog(BuildContext context, WidgetRef ref) =>
-    showCardDialog<void>(
-      context,
-      builder: (_) => PromptDialog(
-        title: 'Join group',
-        hint: 'Code',
-        confirm: 'Join',
-        capitals: true,
-        onSubmit: (code) async => switch (await ref
-            .read(groupsViewModelProvider.notifier)
-            .join(code)) {
-          Ok() => null,
-          Failure(:final error) => groupErrorText(error),
-        },
-      ),
-    );
+Future<void> showJoinGroupDialog(BuildContext context, WidgetRef ref) {
+  final l10n = context.l10n;
+  return showCardDialog<void>(
+    context,
+    builder: (_) => PromptDialog(
+      title: l10n.joinGroup,
+      hint: l10n.codeHint,
+      confirm: l10n.join,
+      capitals: true,
+      onSubmit: (code) async =>
+          switch (await ref.read(groupsViewModelProvider.notifier).join(code)) {
+            Ok() => null,
+            Failure(:final error) => groupErrorText(l10n, error),
+          },
+    ),
+  );
+}
 
 Future<void> showRenameGroupDialog(
   BuildContext context,
   WidgetRef ref,
   Group group,
-) => showCardDialog<void>(
-  context,
-  builder: (_) => PromptDialog(
-    title: 'Rename group',
-    hint: 'Group name',
-    confirm: 'Rename',
-    initial: group.name,
-    onSubmit: (name) async => switch (await ref
-        .read(groupsViewModelProvider.notifier)
-        .rename(group.id, name)) {
-      Ok() => null,
-      Failure(:final error) => groupErrorText(error),
-    },
-  ),
-);
+) {
+  final l10n = context.l10n;
+  return showCardDialog<void>(
+    context,
+    builder: (_) => PromptDialog(
+      title: l10n.renameGroup,
+      hint: l10n.groupNameHint,
+      confirm: l10n.rename,
+      initial: group.name,
+      onSubmit: (name) async => switch (await ref
+          .read(groupsViewModelProvider.notifier)
+          .rename(group.id, name)) {
+        Ok() => null,
+        Failure(:final error) => groupErrorText(l10n, error),
+      },
+    ),
+  );
+}
 
 /// A confirmation whose buttons say what happens; true when the user confirms.
 Future<bool> confirmAction(

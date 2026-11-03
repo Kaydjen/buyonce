@@ -3,10 +3,10 @@ import 'package:buyonce/data/repositories/user_repository.dart';
 import 'package:buyonce/data/services/in_memory_user_service.dart';
 import 'package:buyonce/domain/models/user_profile.dart';
 import 'package:buyonce/main.dart';
+import 'package:buyonce/presentation/view_models/groups/groups_view_model.dart';
 import 'package:buyonce/presentation/view_models/list/list_view_model.dart';
 import 'package:buyonce/presentation/view_models/users/user_names_view_model.dart';
 import 'package:flutter/material.dart';
-import 'package:buyonce/presentation/view_models/groups/groups_view_model.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/utils/result.dart';
 import '../../domain/models/user_profile.dart';
+import '../../l10n/l10n.dart';
 import '../view_models/account/account_view_model.dart';
 import '../view_models/session/session.dart';
 import '../view_models/users/user_names_view_model.dart';
@@ -58,7 +59,7 @@ class _NameScreenState extends ConsumerState<NameScreen> {
         ref.read(namePendingProvider.notifier).set(false);
       case Failure():
         setState(() => _busy = false);
-        showToast(context, 'Enter 1-10 characters');
+        showToast(context, context.l10n.enterNameLength(maxDisplayNameLength));
     }
   }
 
@@ -79,8 +80,8 @@ class _NameScreenState extends ConsumerState<NameScreen> {
                   autofocus: true,
                   maxLength: maxDisplayNameLength,
                   textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(
-                    hintText: 'Name',
+                  decoration: InputDecoration(
+                    hintText: context.l10n.nameHint,
                     counterText: '',
                   ),
                   onChanged: (_) => setState(() {}),
@@ -92,7 +93,7 @@ class _NameScreenState extends ConsumerState<NameScreen> {
                 child: AccentButton(
                   buttonKey: const Key('nameContinue'),
                   onPressed: _valid && !_busy ? _submit : null,
-                  label: 'Continue',
+                  label: context.l10n.continueLabel,
                 ),
               ),
             ],

@@ -1,5 +1,9 @@
 enum ThemeChoice { system, light, dark }
 
+/// Language of the app: follow the phone (English when the phone speaks neither
+/// English nor Ukrainian), or a fixed one.
+enum LanguageChoice { system, en, uk }
+
 /// Text size: follow the phone, or a fixed scale that replaces the phone's own.
 enum TextScaleChoice {
   system(null),
@@ -20,6 +24,7 @@ class AppSettings {
     // Light until the dark theme of design 7 is done (plan step 39); then System.
     this.theme = ThemeChoice.light,
     this.textScale = TextScaleChoice.system,
+    this.language = LanguageChoice.system,
   });
 
   static const defaultAutoSendSeconds = 3600;
@@ -31,17 +36,20 @@ class AppSettings {
   final int autoSendSeconds;
   final ThemeChoice theme;
   final TextScaleChoice textScale;
+  final LanguageChoice language;
 
   AppSettings copyWith({
     bool? autoSendEnabled,
     int? autoSendSeconds,
     ThemeChoice? theme,
     TextScaleChoice? textScale,
+    LanguageChoice? language,
   }) => AppSettings(
     autoSendEnabled: autoSendEnabled ?? this.autoSendEnabled,
     autoSendSeconds: autoSendSeconds ?? this.autoSendSeconds,
     theme: theme ?? this.theme,
     textScale: textScale ?? this.textScale,
+    language: language ?? this.language,
   );
 
   @override
@@ -50,9 +58,10 @@ class AppSettings {
       other.autoSendEnabled == autoSendEnabled &&
       other.autoSendSeconds == autoSendSeconds &&
       other.theme == theme &&
-      other.textScale == textScale;
+      other.textScale == textScale &&
+      other.language == language;
 
   @override
   int get hashCode =>
-      Object.hash(autoSendEnabled, autoSendSeconds, theme, textScale);
+      Object.hash(autoSendEnabled, autoSendSeconds, theme, textScale, language);
 }

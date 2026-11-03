@@ -5,19 +5,22 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/theme/style_variant.dart';
 import '../../domain/models/app_settings.dart';
+import '../../l10n/l10n.dart';
 import '../view_models/settings/settings_view_model.dart';
 import '../view_models/settings/style_variant_view_model.dart';
 import '../widgets/account_section.dart';
 import '../widgets/card_sheet.dart';
-import '../widgets/titled_card.dart';
 import '../widgets/edge_fade.dart';
 import '../widgets/segment_choice.dart';
 import '../widgets/soft_switch_tile.dart';
+import '../widgets/titled_card.dart';
 import '../widgets/version_row.dart';
 
 /// "30 s", "5 min".
-String periodLabel(int seconds) =>
-    seconds < 60 ? '$seconds s' : '${seconds ~/ 60} min';
+String periodLabel(BuildContext context, int seconds) =>
+    seconds < 60
+    ? context.l10n.secondsShort(seconds)
+    : context.l10n.minutesShort(seconds ~/ 60);
 
 /// The value of a row that opens a picker: a flat tint pill, dimmed while the row is off.
 class _ValuePill extends StatelessWidget {
@@ -64,7 +67,7 @@ class SettingsScreen extends ConsumerWidget {
     final settings = ref.watch(settingsProvider);
     final vm = ref.read(settingsProvider.notifier);
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: Text(context.l10n.settings)),
       // Short and fixed: a plain scroll view builds every card, so none is missing.
       body: EdgeFade(
         child: SingleChildScrollView(
@@ -78,13 +81,13 @@ class SettingsScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               TitledCard(
-                title: 'Sending',
+                title: context.l10n.sending,
                 padding: _inner,
                 child: Column(
                   children: [
                     SoftSwitchTile(
                       key: const Key('autoSendSwitch'),
-                      title: 'Auto-send',
+                      title: context.l10n.autoSend,
                       value: settings.autoSendEnabled,
                       onChanged: vm.setAutoSendEnabled,
                     ),
@@ -92,9 +95,9 @@ class SettingsScreen extends ConsumerWidget {
                       key: const Key('autoSendPeriod'),
                       contentPadding: EdgeInsets.zero,
                       enabled: settings.autoSendEnabled,
-                      title: const Text('Send after'),
+                      title: Text(context.l10n.sendAfter),
                       trailing: _ValuePill(
-                        label: periodLabel(settings.autoSendSeconds),
+                        label: periodLabel(context, settings.autoSendSeconds),
                         enabled: settings.autoSendEnabled,
                       ),
                       onTap: () =>
@@ -105,16 +108,35 @@ class SettingsScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
               TitledCard(
-                title: 'Theme',
+                title: context.l10n.theme,
                 padding: _segmentsPad,
                 child: SegmentChoice<ThemeChoice>(
                   key: const Key('themeSelector'),
                   options: [
                     for (final t in ThemeChoice.values)
-                      SegmentOption(t, Text(_themeName(t))),
+                      SegmentOption(t, Text(_themeName(context, t))),
                   ],
                   selected: settings.theme,
                   onChanged: vm.setTheme,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TitledCard(
+                title: context.l10n.language,
+                padding: _segmentsPad,
+                child: SegmentChoice<LanguageChoice>(
+                  key: const Key('languageSelector'),
+                  options: [
+                    SegmentOption(
+                      LanguageChoice.system,
+                      Text(context.l10n.system),
+                    ),
+                    // A language is always written in itself.
+                    const SegmentOption(LanguageChoice.en, Text('English')),
+                    const SegmentOption(LanguageChoice.uk, Text('Українська')),
+                  ],
+                  selected: settings.language,
+                  onChanged: vm.setLanguage,
                 ),
               ),
               if (kDebugMode) ...[
@@ -135,7 +157,7 @@ class SettingsScreen extends ConsumerWidget {
               ],
               const SizedBox(height: 16),
               TitledCard(
-                title: 'Text size',
+                title: context.l10n.textSize,
                 padding: _segmentsPad,
                 child: SegmentChoice<TextScaleChoice>(
                   key: const Key('textScaleSelector'),
@@ -145,7 +167,7 @@ class SettingsScreen extends ConsumerWidget {
                         c,
                         // Each option is drawn at its own size.
                         c.factor == null
-                            ? const Text('System')
+                            ? Text(context.l10n.system)
                             : Text(
                                 'Aa',
                                 textScaler: TextScaler.linear(c.factor!),
@@ -157,16 +179,16 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 16),
-              const TitledCard(
-                title: 'Account',
+              TitledCard(
+                title: context.l10n.account,
                 padding: _inner,
-                child: AccountSection(),
+                child: const AccountSection(),
               ),
               const SizedBox(height: 16),
-              const TitledCard(
-                title: 'About',
+              TitledCard(
+                title: context.l10n.about,
                 padding: _inner,
-                child: VersionRow(),
+                child: const VersionRow(),
               ),
             ],
           ),
@@ -187,7 +209,7 @@ class SettingsScreen extends ConsumerWidget {
           for (final seconds in AppSettings.autoSendPeriods)
             ListTile(
               key: Key('period-$seconds'),
-              title: Text(periodLabel(seconds)),
+              title: Text(periodLabel(context, seconds)),
               trailing: seconds == current ? const Icon(Icons.check) : null,
               onTap: () => Navigator.of(context).pop(seconds),
             ),
@@ -197,9 +219,9 @@ class SettingsScreen extends ConsumerWidget {
     if (picked != null) await vm.setAutoSendSeconds(picked);
   }
 
-  String _themeName(ThemeChoice theme) => switch (theme) {
-    ThemeChoice.system => 'System',
-    ThemeChoice.light => 'Light',
-    ThemeChoice.dark => 'Dark',
+  String _themeName(BuildContext context, ThemeChoice theme) => switch (theme) {
+    ThemeChoice.system => context.l10n.system,
+    ThemeChoice.light => context.l10n.light,
+    ThemeChoice.dark => context.l10n.dark,
   };
 }

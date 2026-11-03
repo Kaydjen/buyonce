@@ -6,10 +6,10 @@ import '../../../core/utils/result.dart';
 import '../../../data/repositories/group_repository.dart';
 import '../../../data/repositories/list_repository.dart';
 import '../../../data/repositories/local_list_merger.dart';
-import '../../../domain/models/group.dart';
-import '../account/account_view_model.dart';
 import '../../../data/services/identity.dart';
 import '../../../data/services/service_providers.dart';
+import '../../../domain/models/group.dart';
+import '../account/account_view_model.dart';
 import '../list/sync_state.dart';
 import '../session/session.dart';
 

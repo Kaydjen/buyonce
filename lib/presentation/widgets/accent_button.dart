@@ -46,24 +46,27 @@ class AccentButton extends StatelessWidget {
           ),
           onPressed: onPressed,
           onLongPress: onLongPress,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (done) ...[
-                Icon(Icons.check, size: 20, color: t.text),
-                const SizedBox(width: 8),
-              ] else if (!t.accentAsText) ...[
-                const AccentDot(size: 9),
-                const SizedBox(width: 10),
-              ],
-              Text(
-                label,
-                style: t.controlStyle(
-                  Theme.of(context).textTheme.titleMedium!
-                      .copyWith(color: t.accentAsText ? t.ink : t.text),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (done) ...[
+                  Icon(Icons.check, size: 20, color: t.text),
+                  const SizedBox(width: 8),
+                ] else if (!t.accentAsText) ...[
+                  const AccentDot(size: 9),
+                  const SizedBox(width: 10),
+                ],
+                Text(
+                  label,
+                  style: t.controlStyle(
+                    Theme.of(context).textTheme.titleMedium!
+                        .copyWith(color: t.accentAsText ? t.ink : t.text),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

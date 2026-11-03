@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_tokens.dart';
+import '../../l10n/l10n.dart';
 import '../view_models/drafts/drafts_view_model.dart';
 import '../view_models/groups/groups_view_model.dart';
 import '../view_models/list/list_view_model.dart';
@@ -57,7 +58,7 @@ class _AddProductsScreenState extends ConsumerState<AddProductsScreen> {
   Widget build(BuildContext context) {
     final drafts = ref.watch(draftsViewModelProvider(_groupId));
     return Scaffold(
-      appBar: AppBar(title: const Text('Add products')),
+      appBar: AppBar(title: Text(context.l10n.addProductsTitle)),
       body: Column(
         children: [
           Padding(
@@ -73,7 +74,7 @@ class _AddProductsScreenState extends ConsumerState<AddProductsScreen> {
                 controller: _field,
                 focusNode: _focus,
                 autofocus: true,
-                decoration: const InputDecoration(hintText: 'Name'),
+                decoration: InputDecoration(hintText: context.l10n.nameHint),
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => _submit(),
               ),
@@ -112,7 +113,7 @@ class _AddProductsScreenState extends ConsumerState<AddProductsScreen> {
               duration: const Duration(milliseconds: 200),
               child: AccentButton(
                 buttonKey: const Key('addCommit'),
-                label: 'Add $count',
+                label: context.l10n.addCount(count),
                 onPressed: _commit,
               ),
             ),
@@ -145,7 +146,7 @@ class _DraftRow extends StatelessWidget {
           ),
           IconButton(
             key: ValueKey('remove-$name'),
-            tooltip: 'Remove $name',
+            tooltip: context.l10n.removeProductTooltip(name),
             onPressed: onRemove,
             icon: Icon(Icons.close, color: context.tokens.muted),
           ),

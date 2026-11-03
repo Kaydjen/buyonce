@@ -1,5 +1,3 @@
-import 'package:buyonce/presentation/view_models/groups/groups_view_model.dart';
-import 'package:buyonce/presentation/widgets/notice_banner.dart';
 import 'package:buyonce/core/utils/result.dart';
 import 'package:buyonce/data/repositories/list_repository.dart';
 import 'package:buyonce/data/services/in_memory_group_service.dart';
@@ -7,11 +5,13 @@ import 'package:buyonce/data/services/in_memory_list_service.dart';
 import 'package:buyonce/data/services/service_providers.dart';
 import 'package:buyonce/domain/models/group.dart';
 import 'package:buyonce/main.dart';
+import 'package:buyonce/presentation/view_models/groups/groups_view_model.dart';
+import 'package:buyonce/presentation/widgets/card_dialog.dart';
+import 'package:buyonce/presentation/widgets/notice_banner.dart';
 import 'package:buyonce/presentation/widgets/product_row.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:buyonce/presentation/widgets/card_dialog.dart';
 
 /// [seed] false starts like a release build: no groups, the first-run screen.
 Future<void> pumpApp(WidgetTester tester, {bool seed = true}) async {

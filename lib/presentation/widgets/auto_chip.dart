@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_tokens.dart';
+import '../../l10n/l10n.dart';
 
 /// "Auto · 15:20", and "Auto · in 8 min" for the last ten minutes. It repeats the
 /// idle rule, so the user knows the list goes out by itself.
@@ -16,15 +17,12 @@ class AutoChip extends StatefulWidget {
 
 class _AutoChipState extends State<AutoChip> {
   late final Timer _tick;
-  String _shown = '';
 
   @override
   void initState() {
     super.initState();
-    _shown = _text;
     _tick = Timer.periodic(const Duration(seconds: 1), (_) {
-      final text = _text;
-      if (text != _shown) setState(() => _shown = text);
+      setState(() {});
     });
   }
 
@@ -34,19 +32,19 @@ class _AutoChipState extends State<AutoChip> {
     super.dispose();
   }
 
-  String get _text {
+  String _text(BuildContext context) {
     final left = widget.at.difference(DateTime.now());
     if (left < const Duration(minutes: 1)) {
-      return 'Auto · in ${left.inSeconds.clamp(1, 59)} s';
+      return context.l10n.autoInSeconds(left.inSeconds.clamp(1, 59));
     }
     if (left <= const Duration(minutes: 10)) {
       final minutes = (left.inSeconds / 60).ceil().clamp(1, 10);
-      return 'Auto · in $minutes min';
+      return context.l10n.autoInMinutes(minutes);
     }
     final t = widget.at.toLocal();
     final hh = t.hour.toString().padLeft(2, '0');
     final mm = t.minute.toString().padLeft(2, '0');
-    return 'Auto · $hh:$mm';
+    return context.l10n.autoAt('$hh:$mm');
   }
 
   @override
@@ -62,7 +60,7 @@ class _AutoChipState extends State<AutoChip> {
         boxShadow: context.tokens.raised(0.4),
       ),
       child: Text(
-        _shown,
+        _text(context),
         style: Theme.of(context).textTheme.bodySmall!
             .copyWith(color: context.tokens.muted),
       ),

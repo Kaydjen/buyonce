@@ -5,14 +5,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/utils/result.dart';
 import '../../domain/models/group.dart';
+import '../../l10n/l10n.dart';
 import '../view_models/groups/groups_view_model.dart';
 import '../view_models/session/session.dart';
 import '../view_models/users/user_names_view_model.dart';
-import '../widgets/group_dialogs.dart';
+import '../widgets/edge_fade.dart';
 import '../widgets/groove.dart';
+import '../widgets/group_dialogs.dart';
 import '../widgets/soft_switch_tile.dart';
 import '../widgets/titled_card.dart';
-import '../widgets/edge_fade.dart';
 import '../widgets/toast.dart';
 
 /// One group: members, invite code, mute, leave and (for the owner) rename, remove
@@ -46,7 +47,7 @@ class GroupScreen extends ConsumerWidget {
             TextButton(
               key: const Key('renameGroup'),
               onPressed: () => showRenameGroupDialog(context, ref, group),
-              child: const Text('Rename'),
+              child: Text(context.l10n.rename),
             ),
         ],
       ),
@@ -60,7 +61,7 @@ class GroupScreen extends ConsumerWidget {
           ),
           children: [
             TitledCard(
-              title: 'Members',
+              title: context.l10n.members,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
                 children: [
@@ -72,8 +73,8 @@ class GroupScreen extends ConsumerWidget {
                       subtitle: id == group.ownerId || id == userId
                           ? Text(
                               [
-                                if (id == group.ownerId) 'Owner',
-                                if (id == userId) 'You',
+                                if (id == group.ownerId) context.l10n.owner,
+                                if (id == userId) context.l10n.you,
                               ].join(' · '),
                               style: TextStyle(color: context.tokens.muted),
                             )
@@ -83,7 +84,7 @@ class GroupScreen extends ConsumerWidget {
                               key: Key('remove-$id'),
                               onPressed: () =>
                                   _remove(context, ref, vm, group, id),
-                              child: const Text('Remove'),
+                              child: Text(context.l10n.remove),
                             )
                           : null,
                     ),
@@ -93,7 +94,7 @@ class GroupScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             TitledCard(
-              title: 'Invite code',
+              title: context.l10n.inviteCode,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Column(
                 children: [
@@ -113,7 +114,7 @@ class GroupScreen extends ConsumerWidget {
                       ),
                       IconButton(
                         key: const Key('copyCode'),
-                        tooltip: 'Copy code',
+                        tooltip: context.l10n.copyCode,
                         onPressed: () => _copy(context, group.inviteCode),
                         icon: const Icon(Icons.copy),
                       ),
@@ -122,7 +123,7 @@ class GroupScreen extends ConsumerWidget {
                   const Groove(),
                   SoftSwitchTile(
                     key: const Key('muteGroup'),
-                    title: 'Mute notifications',
+                    title: context.l10n.muteNotifications,
                     value: group.mutedUserIds.contains(userId),
                     onChanged: (muted) => vm.setMuted(group.id, muted),
                   ),
@@ -133,13 +134,13 @@ class GroupScreen extends ConsumerWidget {
             TextButton(
               key: const Key('leaveGroup'),
               onPressed: () => _leave(context, vm, group),
-              child: const Text('Leave group'),
+              child: Text(context.l10n.leaveGroup),
             ),
             if (owner)
               TextButton(
                 key: const Key('deleteGroup'),
                 onPressed: () => _delete(context, vm, group),
-                child: const Text('Delete group'),
+                child: Text(context.l10n.deleteGroup),
               ),
           ],
         ),
@@ -150,7 +151,7 @@ class GroupScreen extends ConsumerWidget {
   Future<void> _copy(BuildContext context, String code) async {
     await Clipboard.setData(ClipboardData(text: code));
     if (!context.mounted) return;
-    showToast(context, 'Code copied');
+    showToast(context, context.l10n.codeCopied);
   }
 
   Future<void> _remove(
@@ -163,15 +164,15 @@ class GroupScreen extends ConsumerWidget {
     final name = ref.read(userNameProvider(memberId));
     final sure = await confirmAction(
       context,
-      title: 'Remove $name?',
-      body: '$name stops seeing ${group.name}.',
-      confirm: 'Remove $name',
-      keep: 'Keep $name',
+      title: context.l10n.removeMemberTitle(name),
+      body: context.l10n.removeMemberBody(name, group.name),
+      confirm: context.l10n.removeMemberConfirm(name),
+      keep: context.l10n.keepMember(name),
     );
     if (!sure) return;
     final result = await vm.removeMember(group.id, memberId);
     if (result case Failure(:final error) when context.mounted) {
-      showToast(context, groupErrorText(error));
+      showToast(context, groupErrorText(context.l10n, error));
     }
   }
 
@@ -182,16 +183,16 @@ class GroupScreen extends ConsumerWidget {
   ) async {
     final sure = await confirmAction(
       context,
-      title: 'Leave ${group.name}?',
-      body: 'You stop seeing its lists.',
-      confirm: 'Leave group',
-      keep: 'Stay',
+      title: context.l10n.leaveGroupTitle(group.name),
+      body: context.l10n.leaveGroupBody,
+      confirm: context.l10n.leaveGroup,
+      keep: context.l10n.stay,
     );
     if (!sure) return;
     final result = await vm.leave(group.id);
     if (!context.mounted) return;
     if (result case Failure(:final error)) {
-      showToast(context, groupErrorText(error));
+      showToast(context, groupErrorText(context.l10n, error));
     } else {
       Navigator.of(context).pop();
     }
@@ -204,16 +205,16 @@ class GroupScreen extends ConsumerWidget {
   ) async {
     final sure = await confirmAction(
       context,
-      title: 'Delete ${group.name}?',
-      body: 'Its lists and plans are deleted for everyone.',
-      confirm: 'Delete group',
-      keep: 'Keep group',
+      title: context.l10n.deleteGroupTitle(group.name),
+      body: context.l10n.deleteGroupBody,
+      confirm: context.l10n.deleteGroup,
+      keep: context.l10n.keepGroup,
     );
     if (!sure) return;
     final result = await vm.delete(group.id);
     if (!context.mounted) return;
     if (result case Failure(:final error)) {
-      showToast(context, groupErrorText(error));
+      showToast(context, groupErrorText(context.l10n, error));
     } else {
       Navigator.of(context).pop();
     }

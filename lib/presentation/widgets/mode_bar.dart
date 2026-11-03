@@ -1,3 +1,5 @@
+import '../../l10n/l10n.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_tokens.dart';
@@ -20,13 +22,22 @@ class ModeBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.tokens;
-    final tabs = Row(
+    final row = Row(
       mainAxisSize: t.compactTabs ? MainAxisSize.min : MainAxisSize.max,
       children: [
-        _tab(context, ListMode.need, 'Plan', const Key('tabPlan')),
-        _tab(context, ListMode.buy, 'Shop', const Key('tabShop')),
+        _tab(
+          context,
+          ListMode.need,
+          context.l10n.tabPlan,
+          const Key('tabPlan'),
+        ),
+        _tab(context, ListMode.buy, context.l10n.tabShop, const Key('tabShop')),
       ],
     );
+    // Long words at a big text size: the compact switcher shrinks to the screen.
+    final tabs = t.compactTabs
+        ? FittedBox(fit: BoxFit.scaleDown, child: row)
+        : row;
     if (t.floatTabs) return _floating(context, tabs);
     if (!t.pillTabs) {
       return Material(

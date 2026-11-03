@@ -1,0 +1,323 @@
+{
+  "@@locale": "en",
+  "cancel": "Cancel",
+  "retry": "Retry",
+  "tabPlan": "Plan",
+  "tabShop": "Shop",
+  "delete": "Delete",
+  "undo": "Undo",
+  "add": "Add",
+  "nameHint": "Name",
+  "search": "Search",
+  "save": "Save",
+  "continueLabel": "Continue",
+  "create": "Create",
+  "join": "Join",
+  "rename": "Rename",
+  "remove": "Remove",
+  "system": "System",
+  "offline": "Offline",
+  "failedToLoad": "Failed to load",
+  "addProductsTitle": "Add products",
+  "addCount": "Add {count}",
+  "@addCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "removeProductTooltip": "Remove {name}",
+  "@removeProductTooltip": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "members": "Members",
+  "owner": "Owner",
+  "you": "You",
+  "inviteCode": "Invite code",
+  "copyCode": "Copy code",
+  "muteNotifications": "Mute notifications",
+  "leaveGroup": "Leave group",
+  "deleteGroup": "Delete group",
+  "codeCopied": "Code copied",
+  "removeMemberTitle": "Remove {name}?",
+  "@removeMemberTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "removeMemberBody": "{name} stops seeing {group}.",
+  "@removeMemberBody": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "removeMemberConfirm": "Remove {name}",
+  "@removeMemberConfirm": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "keepMember": "Keep {name}",
+  "@keepMember": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "leaveGroupTitle": "Leave {group}?",
+  "@leaveGroupTitle": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "leaveGroupBody": "You stop seeing its lists.",
+  "stay": "Stay",
+  "deleteGroupTitle": "Delete {group}?",
+  "@deleteGroupTitle": {
+    "placeholders": {
+      "group": {
+        "type": "String"
+      }
+    }
+  },
+  "deleteGroupBody": "Its lists and plans are deleted for everyone.",
+  "keepGroup": "Keep group",
+  "history": "History",
+  "noPurchasesYet": "No purchases yet",
+  "today": "Today",
+  "yesterday": "Yesterday",
+  "addedCount": "Added: {n}",
+  "@addedCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "markedCount": "Marked: {n}",
+  "@markedCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "sentCount": "Sent {n}",
+  "@sentCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "doneCount": "Done {n}",
+  "@doneCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "notifiedCount": "Notified {n}",
+  "@notifiedCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "couldntSave": "Couldn't save, try again",
+  "send": "Send",
+  "done": "Done",
+  "notify": "Notify",
+  "toBuy": "To buy",
+  "toBuyWord": "to buy",
+  "frequent": "Frequent",
+  "select": "Select",
+  "addQuery": "Add \"{query}\"",
+  "@addQuery": {
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "find": "Find",
+  "closeSearch": "Close search",
+  "shoppingTaken": "{name} shopping, {n} taken",
+  "@shoppingTaken": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "menu": "Menu",
+  "menuUpdateAvailable": "Menu, update available",
+  "sort": "Sort",
+  "templates": "Templates",
+  "settings": "Settings",
+  "newLabel": "New",
+  "newBy": "New · {authors}",
+  "@newBy": {
+    "placeholders": {
+      "authors": {
+        "type": "String"
+      }
+    }
+  },
+  "markAll": "Mark all",
+  "alreadyBoughtBy": "{name} already bought this",
+  "@alreadyBoughtBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "youAlreadyBought": "You already bought this",
+  "signInWithGoogle": "Sign in with Google",
+  "continueWithoutAccount": "Continue without account",
+  "enterNameLength": "Enter 1-{max} characters",
+  "@enterNameLength": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "sending": "Sending",
+  "autoSend": "Auto-send",
+  "sendAfter": "Send after",
+  "theme": "Theme",
+  "light": "Light",
+  "dark": "Dark",
+  "textSize": "Text size",
+  "language": "Language",
+  "account": "Account",
+  "about": "About",
+  "secondsShort": "{n} s",
+  "@secondsShort": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "minutesShort": "{n} min",
+  "@minutesShort": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "googleAccount": "Google account",
+  "signOut": "Sign out",
+  "deleteAccount": "Delete account",
+  "failedSignOut": "Failed to sign out",
+  "deleteAccountTitle": "Delete account?",
+  "deleteAccountBody": "You leave all groups and your data is deleted. This cannot be undone.",
+  "keepAccount": "Keep account",
+  "couldntConfirm": "Couldn't confirm. Try again.",
+  "failedDeleteAccount": "Failed to delete the account",
+  "autoInSeconds": "Auto · in {n} s",
+  "@autoInSeconds": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "autoInMinutes": "Auto · in {n} min",
+  "@autoInMinutes": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "autoAt": "Auto · {time}",
+  "@autoAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "enterName": "Enter a name",
+  "noGroupWithCode": "No group with this code",
+  "groupFull": "This group is full",
+  "noConnection": "No connection",
+  "somethingWrong": "Something went wrong",
+  "newGroup": "New group",
+  "groupNameHint": "Group name",
+  "joinGroup": "Join group",
+  "codeHint": "Code",
+  "renameGroup": "Rename group",
+  "groupSettings": "Group settings",
+  "noticeBought": "{name} bought: {items}",
+  "@noticeBought": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "items": {
+        "type": "String"
+      }
+    }
+  },
+  "noticeNeeded": "{name} needs: {items}",
+  "@noticeNeeded": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "items": {
+        "type": "String"
+      }
+    }
+  },
+  "recent": "Recent",
+  "deleted": "Deleted",
+  "pin": "Pin",
+  "unpin": "Unpin",
+  "couldntSignIn": "Couldn't sign in",
+  "signInToUseGroups": "Sign in to use groups",
+  "notNow": "Not now",
+  "signIn": "Sign in",
+  "sortAlphabetical": "Alphabetical",
+  "sortFrequent": "Most frequent",
+  "sortRecent": "Recently bought",
+  "version": "Version",
+  "updateTo": "Update to {version}",
+  "@updateTo": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "download": "Download",
+  "install": "Install"
+}

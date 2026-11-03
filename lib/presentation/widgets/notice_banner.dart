@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../domain/models/notice.dart';
 import '../../domain/models/product.dart';
+import '../../l10n/app_localizations_en.dart';
+import '../../l10n/l10n.dart';
 import 'accent_dot.dart';
 import 'panel.dart';
 
@@ -14,7 +16,9 @@ List<String> noticeLines(
   List<Product> products,
   String Function(String userId) nameOf, {
   int maxProducts = 3,
+  AppLocalizations? l10n,
 }) {
+  final text = l10n ?? AppLocalizationsEn();
   final names = {for (final p in products) p.id: p.name};
   final ordered = [...notices]..sort((a, b) => a.sentAt.compareTo(b.sentAt));
   final groups = <(String, NoticeKind), List<String>>{};
@@ -28,11 +32,21 @@ List<String> noticeLines(
   return [
     for (final MapEntry(key: (from, kind), value: list) in groups.entries)
       if (list.isNotEmpty)
-        '${nameOf(from)} ${kind == NoticeKind.needed ? 'needs' : 'bought'}: '
-            '${list.take(maxProducts).join(', ')}'
-            '${list.length > maxProducts ? ' +${list.length - maxProducts}' : ''}',
+        _line(text, kind, nameOf(from), [
+          list.take(maxProducts).join(', '),
+          if (list.length > maxProducts) '+${list.length - maxProducts}',
+        ].join(' ')),
   ];
 }
+
+String _line(
+  AppLocalizations l10n,
+  NoticeKind kind,
+  String name,
+  String items,
+) => kind == NoticeKind.needed
+    ? l10n.noticeNeeded(name, items)
+    : l10n.noticeBought(name, items);
 
 /// A stand-in for the partner's push: who bought or needs what. A tap dismisses it. A
 /// raised card like the lists, so it reads as a message, with the small accent dot of

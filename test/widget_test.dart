@@ -1,8 +1,10 @@
 import 'package:buyonce/core/theme/app_tokens.dart';
+import 'package:buyonce/core/theme/style_variant.dart';
 import 'package:buyonce/core/utils/result.dart';
 import 'package:buyonce/main.dart';
 import 'package:buyonce/presentation/view_models/groups/groups_view_model.dart';
 import 'package:buyonce/presentation/view_models/list/list_view_model.dart';
+import 'package:buyonce/presentation/view_models/settings/style_variant_view_model.dart';
 import 'package:buyonce/presentation/widgets/flash_on_add.dart';
 import 'package:buyonce/presentation/widgets/product_row.dart';
 import 'package:flutter/material.dart';
@@ -203,6 +205,7 @@ Future<void> switchGroup(WidgetTester tester, String name) async {
 }
 
 void main() {
+  ukrainianLargeFont();
   testWidgets('opens in Plan with the whole catalog and the Select card', (
     tester,
   ) async {
@@ -1247,5 +1250,55 @@ void main() {
     await tester.tap(find.byKey(const Key('groupButton')));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
+  });
+}
+
+// Ukrainian words are longer: the screens must hold them at the largest text size too.
+void ukrainianLargeFont() {
+  testWidgets('Ukrainian text at a large system font does not overflow', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(411, 900);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 2.0;
+    tester.platformDispatcher.localesTestValue = const [Locale('uk', 'UA')];
+    addTearDown(tester.view.reset);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    addTearDown(tester.platformDispatcher.clearLocalesTestValue);
+    // The shipped design (the other tests run on the flat one).
+    defaultStyleVariant = StyleVariant.d7;
+    addTearDown(() => defaultStyleVariant = StyleVariant.d1);
+    await pumpApp(tester);
+    expect(find.text('План'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await goShop(tester);
+    await partnerMarks(tester, ['seed4']);
+    await tester.tap(find.text('Milk'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('sendButton')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byKey(const Key('groupButton')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('Нова група'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('Скасувати'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('menuButton')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.text('Налаштування'));
+    await tester.pumpAndSettle();
+    for (final key in [
+      'languageSelector',
+      'textScaleSelector',
+      'themeSelector',
+    ]) {
+      await tester.scrollUntilVisible(find.byKey(Key(key)), 100);
+      expect(tester.takeException(), isNull, reason: key);
+    }
   });
 }

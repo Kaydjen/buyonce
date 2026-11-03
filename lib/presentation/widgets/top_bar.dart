@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_tokens.dart';
+import '../../l10n/l10n.dart';
 import 'accent_dot.dart';
 import 'fade_slot.dart';
 import 'header_bar.dart';
@@ -82,13 +83,13 @@ class TopBar extends StatelessWidget {
               child: t.depth > 0
                   ? RaisedIcon(
                       key: const Key('addProducts'),
-                      label: 'Add products',
+                      label: context.l10n.addProductsTitle,
                       onPressed: onAdd,
                       child: const Icon(Icons.add),
                     )
                   : IconButton(
                       key: const Key('addProducts'),
-                      tooltip: 'Add products',
+                      tooltip: context.l10n.addProductsTitle,
                       onPressed: onAdd,
                       icon: const Icon(Icons.add),
                     ),
@@ -98,7 +99,7 @@ class TopBar extends StatelessWidget {
               key: const Key('addProducts'),
               onPressed: onAdd,
               style: headerButtonStyle(context),
-              child: const Text('Add'),
+              child: Text(context.l10n.add),
             ),
           if (offline) const _OfflineSign(),
           menu,
@@ -115,6 +116,8 @@ class TopBar extends StatelessWidget {
         : theme.headlineSmall!;
     final statusText = Text.rich(
       key: const Key('toBuyCount'),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
       TextSpan(
         children: [
           if (!t.accentAsText) ...[
@@ -133,7 +136,7 @@ class TopBar extends StatelessWidget {
               t.titleWeight,
             ),
           ),
-          const TextSpan(text: ' to buy'),
+          TextSpan(text: ' ${context.l10n.toBuyWord}'),
         ],
       ),
       style: theme.bodyMedium!.copyWith(color: t.muted),
@@ -189,11 +192,13 @@ class TopBar extends StatelessWidget {
             ),
           ),
           if (t.statusInline)
-            FadeSlot(
-              show: status,
-              child: Padding(
-                padding: const EdgeInsets.only(left: 12),
-                child: statusBox,
+            Flexible(
+              child: FadeSlot(
+                show: status,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 12),
+                  child: statusBox,
+                ),
               ),
             ),
         ],
@@ -208,7 +213,7 @@ class _OfflineSign extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Tooltip(
-    message: 'Offline',
+    message: context.l10n.offline,
     child: Padding(
       key: const Key('offlineSign'),
       padding: const EdgeInsets.symmetric(horizontal: 8),

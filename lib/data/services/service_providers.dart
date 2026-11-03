@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'account_service.dart';
-import 'no_update_service.dart';
 import 'group_service.dart';
 import 'in_memory_account_service.dart';
 import 'in_memory_group_service.dart';
@@ -10,6 +9,7 @@ import 'in_memory_list_service.dart';
 import 'in_memory_update_service.dart';
 import 'in_memory_user_service.dart';
 import 'list_service.dart';
+import 'no_update_service.dart';
 import 'push_service.dart';
 import 'update_service.dart';
 import 'user_service.dart';

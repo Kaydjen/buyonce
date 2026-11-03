@@ -6,8 +6,8 @@ import '../../core/utils/result.dart';
 import '../../core/utils/result_x.dart';
 import '../../domain/models/group.dart';
 import '../services/group_service.dart';
-import '../services/list_service.dart';
 import '../services/identity.dart';
+import '../services/list_service.dart';
 
 /// Groups and their members: create, join by code, rename, remove a member, leave,
 /// delete. Only the owner renames, removes members and deletes.

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_tokens.dart';
+import '../../l10n/l10n.dart';
 
 /// The shell of the top bar of Plan and Shop: one height, one shape in both modes. In
 /// styles with a header tone the Shop bar sits on a tint plate.
@@ -44,7 +45,7 @@ class HeaderStatus extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Text(
-        '$count to buy',
+        '$count ${context.l10n.toBuyWord}',
         key: const Key('toBuyCount'),
         style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: t.muted),
       ),

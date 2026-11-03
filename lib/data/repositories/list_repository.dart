@@ -12,8 +12,8 @@ import '../../domain/models/purchase.dart';
 import '../../domain/models/sort_key.dart';
 import '../../domain/models/trip.dart';
 import '../../domain/models/trip_mark.dart';
-import '../services/list_service.dart';
 import '../services/identity.dart';
+import '../services/list_service.dart';
 import 'group_repository.dart';
 
 class ListRepository {

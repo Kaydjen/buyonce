@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/utils/result.dart';
 import '../../domain/models/account.dart';
+import '../../l10n/l10n.dart';
 import '../view_models/account/account_view_model.dart';
 import 'card_dialog.dart';
 import 'plain_button.dart';
@@ -22,8 +23,8 @@ Future<bool> signInWithFeedback(
       result.error != AccountError.signInCancelled) {
     showToast(
       context,
-      "Couldn't sign in",
-      actionLabel: 'Retry',
+      context.l10n.couldntSignIn,
+      actionLabel: context.l10n.retry,
       onAction: () =>
           retry != null ? retry() : signInWithFeedback(context, ref),
     );
@@ -37,15 +38,15 @@ Future<void> showSignInRequired(BuildContext context, WidgetRef ref) async {
     context,
     builder: (context) => CardDialog(
       key: const Key('signInRequired'),
-      title: 'Sign in to use groups',
+      title: context.l10n.signInToUseGroups,
       cancel: PlainButton(
-        label: 'Not now',
+        label: context.l10n.notNow,
         onPressed: () => Navigator.of(context).pop(false),
       ),
       confirm: PlainButton(
         key: const Key('signInRequiredYes'),
         raised: true,
-        label: 'Sign in',
+        label: context.l10n.signIn,
         onPressed: () => Navigator.of(context).pop(true),
       ),
     ),

@@ -2,13 +2,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../domain/models/account.dart';
-import '../view_models/account/account_view_model.dart';
 import '../../core/theme/app_tokens.dart';
+import '../../domain/models/account.dart';
+import '../../l10n/l10n.dart';
+import '../view_models/account/account_view_model.dart';
 import '../widgets/accent_button.dart';
+import '../widgets/card_sheet.dart';
 import '../widgets/plain_button.dart';
 import '../widgets/sign_in_prompt.dart';
-import '../widgets/card_sheet.dart';
 
 /// Shown at the start until the user signs in or continues without an account (local
 /// mode: the personal list only). A cancelled sign-in returns here silently, a failed
@@ -77,14 +78,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         buttonKey: const Key('signIn'),
                         onPressed: _signIn,
                         onLongPress: kDebugMode ? _debugOutcome : null,
-                        label: 'Sign in with Google',
+                        label: context.l10n.signInWithGoogle,
                       ),
                       const SizedBox(height: 20),
                       PlainButton(
                         key: const Key('continueLocal'),
                         onPressed: () =>
                             ref.read(localModeProvider.notifier).set(true),
-                        label: 'Continue without account',
+                        label: context.l10n.continueWithoutAccount,
                       ),
                     ],
                   ),

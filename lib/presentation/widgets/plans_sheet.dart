@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_tokens.dart';
 import '../../domain/models/plan.dart';
+import '../../l10n/l10n.dart';
 import '../view_models/list/list_view_model.dart';
 import 'card_sheet.dart';
 import 'groove.dart';
@@ -72,7 +73,7 @@ class _PlansSheetState extends ConsumerState<PlansSheet> {
           color: context.tokens.tint,
           alignment: Alignment.centerRight,
           padding: const EdgeInsets.only(right: 24),
-          child: const Text('Delete'),
+          child: Text(context.l10n.delete),
         ),
         child: InkWell(
           onTap: () async {
@@ -81,7 +82,7 @@ class _PlansSheetState extends ConsumerState<PlansSheet> {
             Navigator.of(context).pop();
             final added = await vm.applyPlan(plan);
             if (added == 0 || !page.mounted) return;
-            showToast(page, 'Added: $added');
+            showToast(page, context.l10n.addedCount(added));
           },
           child: Padding(
             padding: const EdgeInsets.only(left: 16),
@@ -98,7 +99,7 @@ class _PlansSheetState extends ConsumerState<PlansSheet> {
                   ),
                 ),
                 IconButton(
-                  tooltip: plan.pinned ? 'Unpin' : 'Pin',
+                  tooltip: plan.pinned ? context.l10n.unpin : context.l10n.pin,
                   onPressed: () => vm.togglePinned(plan),
                   icon: Icon(
                     plan.pinned ? Icons.push_pin : Icons.push_pin_outlined,
@@ -109,7 +110,7 @@ class _PlansSheetState extends ConsumerState<PlansSheet> {
                 ),
                 IconButton(
                   key: Key('delete-${plan.id}'),
-                  tooltip: 'Delete',
+                  tooltip: context.l10n.delete,
                   onPressed: () => _delete(plan),
                   icon: Icon(Icons.delete_outline, color: context.tokens.muted),
                 ),
@@ -140,11 +141,11 @@ class _PlansSheetState extends ConsumerState<PlansSheet> {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (pinned.isNotEmpty) ...[
-          plansCard('Templates', pinned),
+          plansCard(context.l10n.templates, pinned),
           const SizedBox(height: 16),
         ],
         if (recent.isNotEmpty) ...[
-          plansCard('Recent', recent),
+          plansCard(context.l10n.recent, recent),
           const SizedBox(height: 16),
         ],
         if (_undo != null)
@@ -155,7 +156,7 @@ class _PlansSheetState extends ConsumerState<PlansSheet> {
               children: [
                 Expanded(
                   child: Text(
-                    'Deleted',
+                    context.l10n.deleted,
                     style: Theme.of(context).textTheme.bodyMedium!
                         .copyWith(color: context.tokens.muted),
                   ),
@@ -163,7 +164,7 @@ class _PlansSheetState extends ConsumerState<PlansSheet> {
                 TextButton(
                   key: const Key('undoDelete'),
                   onPressed: _restore,
-                  child: const Text('Undo'),
+                  child: Text(context.l10n.undo),
                 ),
               ],
             ),

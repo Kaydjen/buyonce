@@ -32,6 +32,9 @@ class SettingsViewModel extends Notifier<AppSettings> {
   Future<void> setTextScale(TextScaleChoice scale) =>
       _update(state.copyWith(textScale: scale));
 
+  Future<void> setLanguage(LanguageChoice language) =>
+      _update(state.copyWith(language: language));
+
   /// The state changes at once; a failed write is ignored (the value lasts until the
   /// app closes).
   Future<void> _update(AppSettings next) async {

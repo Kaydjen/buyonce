@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../view_models/groups/groups_view_model.dart';
 import 'accent_dot.dart';
 import 'card_sheet.dart';
@@ -70,16 +71,16 @@ class _GroupSheet extends ConsumerWidget {
             SheetCard(
               children: [
                 ListTile(
-                  title: const Text('New group'),
+                  title: Text(context.l10n.newGroup),
                   onTap: () => Navigator.of(context).pop(const NewGroup()),
                 ),
                 ListTile(
-                  title: const Text('Join group'),
+                  title: Text(context.l10n.joinGroup),
                   onTap: () => Navigator.of(context).pop(const JoinGroup()),
                 ),
                 if (groups.any((g) => g.id == current && !g.personal))
                   ListTile(
-                    title: const Text('Group settings'),
+                    title: Text(context.l10n.groupSettings),
                     onTap: () =>
                         Navigator.of(context).pop(const GroupSettings()),
                   ),

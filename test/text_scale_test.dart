@@ -1,4 +1,3 @@
-import 'package:flutter/rendering.dart';
 import 'package:buyonce/data/services/in_memory_group_service.dart';
 import 'package:buyonce/data/services/in_memory_list_service.dart';
 import 'package:buyonce/data/services/service_providers.dart';
@@ -10,6 +9,7 @@ import 'package:buyonce/presentation/view_models/session/session.dart';
 import 'package:buyonce/presentation/view_models/settings/settings_view_model.dart';
 import 'package:buyonce/presentation/view_models/users/user_names_view_model.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';

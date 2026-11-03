@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_tokens.dart';
+import '../../l10n/l10n.dart';
 import '../view_models/update/update_view_model.dart';
 
 /// Settings > Version: the installed version, or the stage of an update: available,
@@ -19,17 +20,19 @@ class VersionRow extends ConsumerWidget {
       UpdateStatus.upToDate => ListTile(
         key: const Key('versionRow'),
         contentPadding: EdgeInsets.zero,
-        title: const Text('Version'),
+        title: Text(context.l10n.version),
         trailing: Text(update.currentVersion, style: muted),
       ),
       UpdateStatus.available => ListTile(
         key: const Key('versionRow'),
         contentPadding: EdgeInsets.zero,
-        title: Text('Update to $version'),
-        trailing: FilledButton(
-          key: const Key('updateDownload'),
-          onPressed: vm.download,
-          child: const Text('Download'),
+        title: Text(context.l10n.updateTo(version)),
+        trailing: _fit(
+          FilledButton(
+            key: const Key('updateDownload'),
+            onPressed: vm.download,
+            child: Text(context.l10n.download),
+          ),
         ),
       ),
       UpdateStatus.downloading => ListTile(
@@ -44,23 +47,37 @@ class VersionRow extends ConsumerWidget {
       UpdateStatus.failed => ListTile(
         key: const Key('versionRow'),
         contentPadding: EdgeInsets.zero,
-        title: Text('Update to $version'),
-        trailing: TextButton(
-          key: const Key('updateRetry'),
-          onPressed: vm.download,
-          child: const Text('Retry'),
+        title: Text(context.l10n.updateTo(version)),
+        trailing: _fit(
+          TextButton(
+            key: const Key('updateRetry'),
+            onPressed: vm.download,
+            child: Text(context.l10n.retry),
+          ),
         ),
       ),
       UpdateStatus.ready => ListTile(
         key: const Key('versionRow'),
         contentPadding: EdgeInsets.zero,
-        title: Text('Update to $version'),
-        trailing: FilledButton(
-          key: const Key('updateInstall'),
-          onPressed: vm.install,
-          child: const Text('Install'),
+        title: Text(context.l10n.updateTo(version)),
+        trailing: _fit(
+          FilledButton(
+            key: const Key('updateInstall'),
+            onPressed: vm.install,
+            child: Text(context.l10n.install),
+          ),
         ),
       ),
     };
   }
 }
+
+/// A button beside a long title: it shrinks instead of squeezing the title out.
+Widget _fit(Widget button) => ConstrainedBox(
+  constraints: const BoxConstraints(maxWidth: 150),
+  child: FittedBox(
+    fit: BoxFit.scaleDown,
+    alignment: Alignment.centerRight,
+    child: button,
+  ),
+);

@@ -1,10 +1,9 @@
-import 'package:flutter_test/flutter_test.dart';
-
 import 'package:buyonce/core/utils/result.dart';
 import 'package:buyonce/data/repositories/account_repository.dart';
 import 'package:buyonce/data/services/account_service.dart';
 import 'package:buyonce/data/services/in_memory_account_service.dart';
 import 'package:buyonce/domain/models/account.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 class _RealService extends InMemoryAccountService {
   _RealService() : super(seed: false);

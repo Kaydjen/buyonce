@@ -2,14 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_tokens.dart';
+import '../../l10n/l10n.dart';
 import '../view_models/groups/groups_view_model.dart';
 import '../view_models/history/history_days.dart';
 import '../view_models/history/history_view_model.dart';
 import '../view_models/session/session.dart';
 import '../view_models/users/user_names_view_model.dart';
+import '../widgets/edge_fade.dart';
 import '../widgets/load_failed.dart';
 import '../widgets/titled_card.dart';
-import '../widgets/edge_fade.dart';
 
 /// What was bought, by day and with the time of the mark. Your own purchases carry no
 /// name; other members' purchases do.
@@ -30,11 +31,11 @@ class HistoryScreen extends ConsumerWidget {
             ?.utcOffset ??
         DateTime.now().timeZoneOffset;
     return Scaffold(
-      appBar: AppBar(title: const Text('History')),
+      appBar: AppBar(title: Text(context.l10n.history)),
       body: switch (history) {
         AsyncData(:final value) when value.isEmpty => Center(
           child: Text(
-            'No purchases yet',
+            context.l10n.noPurchasesYet,
             style: TextStyle(color: context.tokens.muted),
           ),
         ),
@@ -47,7 +48,14 @@ class HistoryScreen extends ConsumerWidget {
               24,
             ),
             children: [
-              for (final day in groupByDay(value, offset, DateTime.now())) ...[
+              for (final day in groupByDay(
+                value,
+                offset,
+                DateTime.now(),
+                locale: Localizations.localeOf(context).toString(),
+                today: context.l10n.today,
+                yesterday: context.l10n.yesterday,
+              )) ...[
                 TitledCard(
                   title: day.label,
                   padding: const EdgeInsets.symmetric(

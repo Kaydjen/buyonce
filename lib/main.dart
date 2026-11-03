@@ -14,14 +14,15 @@ import 'data/services/http_send_worker.dart';
 import 'data/services/identity.dart';
 import 'data/services/in_memory_list_service.dart';
 import 'data/services/local_list_store.dart';
-import 'data/services/settings_service.dart';
-import 'domain/models/group.dart';
 import 'data/services/service_providers.dart';
+import 'data/services/settings_service.dart';
 import 'domain/models/app_settings.dart';
-import 'presentation/view_models/groups/groups_view_model.dart';
-import 'presentation/view_models/settings/style_variant_view_model.dart';
-import 'presentation/view_models/settings/settings_view_model.dart';
+import 'domain/models/group.dart';
+import 'l10n/l10n.dart';
 import 'presentation/screens/app_gate.dart';
+import 'presentation/view_models/groups/groups_view_model.dart';
+import 'presentation/view_models/settings/settings_view_model.dart';
+import 'presentation/view_models/settings/style_variant_view_model.dart';
 
 // Web client id from google-services.json (client_type 3); not a secret.
 const _serverClientId =
@@ -69,6 +70,15 @@ class BuyOnceApp extends ConsumerWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'BuyOnce',
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      // null follows the phone; a phone with another language gets English (the
+      // first supported locale).
+      locale: switch (ref.watch(settingsProvider.select((s) => s.language))) {
+        LanguageChoice.system => null,
+        LanguageChoice.en => const Locale('en'),
+        LanguageChoice.uk => const Locale('uk'),
+      },
       theme: AppTheme.light(variant),
       darkTheme: AppTheme.dark(variant),
       themeMode: switch (ref.watch(settingsProvider.select((s) => s.theme))) {

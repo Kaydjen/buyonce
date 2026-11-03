@@ -6,6 +6,7 @@ import '../../core/theme/app_tokens.dart';
 import '../../core/utils/result.dart';
 import '../../domain/models/account.dart';
 import '../../domain/models/user_profile.dart';
+import '../../l10n/l10n.dart';
 import '../view_models/account/account_view_model.dart';
 import '../view_models/session/session.dart';
 import '../view_models/users/user_names_view_model.dart';
@@ -44,7 +45,7 @@ class AccountSection extends ConsumerWidget {
             child: AccentButton(
               buttonKey: const Key('accountSignIn'),
               onPressed: () => _signIn(context, ref),
-              label: 'Sign in with Google',
+              label: context.l10n.signInWithGoogle,
             ),
           ),
           if (kDebugMode) _debugLoginButton(context, ref),
@@ -57,14 +58,14 @@ class AccountSection extends ConsumerWidget {
         ListTile(
           key: const Key('accountName'),
           contentPadding: EdgeInsets.zero,
-          title: const Text('Name'),
+          title: Text(context.l10n.nameHint),
           subtitle: Text(ref.watch(userNameProvider(me)), style: muted),
           onTap: () => _editName(context, ref, me),
         ),
         ListTile(
           key: const Key('accountEmail'),
           contentPadding: EdgeInsets.zero,
-          title: const Text('Google account'),
+          title: Text(context.l10n.googleAccount),
           subtitle: Text(signedIn.email, style: muted),
         ),
         const Groove(),
@@ -72,14 +73,14 @@ class AccountSection extends ConsumerWidget {
           key: const Key('signOut'),
           style: _flush,
           onPressed: () => _signOut(context, ref),
-          child: const Text('Sign out'),
+          child: Text(context.l10n.signOut),
         ),
         const Groove(),
         TextButton(
           key: const Key('deleteAccount'),
           style: _flush,
           onPressed: () => _delete(context, ref, me),
-          child: const Text('Delete account'),
+          child: Text(context.l10n.deleteAccount),
         ),
         if (kDebugMode) _debugLoginButton(context, ref),
       ],
@@ -99,23 +100,25 @@ class AccountSection extends ConsumerWidget {
     child: const Text('Debug: show login screen'),
   );
 
-  Future<void> _editName(BuildContext context, WidgetRef ref, String me) =>
-      showCardDialog<void>(
-        context,
-        builder: (_) => PromptDialog(
-          title: 'Name',
-          hint: 'Name',
-          confirm: 'Save',
-          initial: ref.read(userNameProvider(me)),
-          maxLength: maxDisplayNameLength,
-          onSubmit: (name) async => switch (await ref
-              .read(userNamesProvider.notifier)
-              .setName(me, name)) {
-            Ok() => null,
-            Failure() => 'Enter 1-10 characters',
-          },
-        ),
-      );
+  Future<void> _editName(BuildContext context, WidgetRef ref, String me) {
+    final l10n = context.l10n;
+    return showCardDialog<void>(
+      context,
+      builder: (_) => PromptDialog(
+        title: l10n.nameHint,
+        hint: l10n.nameHint,
+        confirm: l10n.save,
+        initial: ref.read(userNameProvider(me)),
+        maxLength: maxDisplayNameLength,
+        onSubmit: (name) async => switch (await ref
+            .read(userNamesProvider.notifier)
+            .setName(me, name)) {
+          Ok() => null,
+          Failure() => l10n.enterNameLength(maxDisplayNameLength),
+        },
+      ),
+    );
+  }
 
   /// Signed out, the app is a personal list; Settings closes to show it.
   Future<void> _signOut(BuildContext context, WidgetRef ref) async {
@@ -125,7 +128,7 @@ class AccountSection extends ConsumerWidget {
     if (result is Ok<void>) {
       navigator.popUntil((route) => route.isFirst);
     } else if (context.mounted) {
-      _say(context, 'Failed to sign out');
+      _say(context, context.l10n.failedSignOut);
     }
   }
 
@@ -141,10 +144,10 @@ class AccountSection extends ConsumerWidget {
   Future<void> _delete(BuildContext context, WidgetRef ref, String me) async {
     final sure = await confirmAction(
       context,
-      title: 'Delete account?',
-      body: 'You leave all groups and your data is deleted. This cannot be undone.',
-      confirm: 'Delete account',
-      keep: 'Keep account',
+      title: context.l10n.deleteAccountTitle,
+      body: context.l10n.deleteAccountBody,
+      confirm: context.l10n.deleteAccount,
+      keep: context.l10n.keepAccount,
     );
     if (!sure || !context.mounted) return;
     final navigator = Navigator.of(context);
@@ -155,9 +158,9 @@ class AccountSection extends ConsumerWidget {
       case Ok():
         navigator.popUntil((route) => route.isFirst);
       case Failure(error: AccountError.reauthFailed) when context.mounted:
-        _say(context, "Couldn't confirm. Try again.");
+        _say(context, context.l10n.couldntConfirm);
       case Failure() when context.mounted:
-        _say(context, 'Failed to delete the account');
+        _say(context, context.l10n.failedDeleteAccount);
       case Failure():
     }
   }

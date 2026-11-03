@@ -13,10 +13,10 @@ import 'package:buyonce/presentation/view_models/account/account_view_model.dart
 import 'package:buyonce/presentation/view_models/groups/groups_view_model.dart';
 import 'package:buyonce/presentation/view_models/list/list_view_model.dart';
 import 'package:buyonce/presentation/view_models/users/user_names_view_model.dart';
+import 'package:buyonce/presentation/widgets/card_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:buyonce/presentation/widgets/card_dialog.dart';
 
 Future<ProviderContainer> pumpApp(
   WidgetTester tester, {
