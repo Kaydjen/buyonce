@@ -81,6 +81,10 @@ abstract class ListService {
   /// Replaces the marks of the user's open trip.
   Future<Result<void>> updateTripMarks(Trip trip);
 
+  /// The time the server sends the open [trip] by itself (the app may be dead by then);
+  /// null removes it.
+  Future<Result<void>> setAutoSendAt(Trip trip, DateTime? at);
+
   /// Sends the trip: it closes, the planned flags of its products are cleared, and the
   /// server counts the trip in `usage` and tells [notify] (Worker, step 61; the
   /// in-memory service does all of it, the Firestore one only closes the trip and

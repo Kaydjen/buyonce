@@ -753,6 +753,28 @@ void main() {
     expect(sendOpacity(tester), 1);
   });
 
+  testWidgets('Send confirms at once and keeps its text while it slides out', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    await goShop(tester);
+    await tester.tap(find.text('Buns'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('sendButton')));
+    await tester.pump(const Duration(milliseconds: 50));
+    // The marks are gone from the state, yet the button shows the confirmation.
+    expect(find.text('Sent 1'), findsOneWidget);
+    expect(find.textContaining('Send 0'), findsNothing);
+
+    // The confirmation ends: on the way out it is still "Sent 1", never "Send 0".
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(sendOpacity(tester), 0);
+    expect(find.text('Sent 1'), findsOneWidget);
+    expect(find.textContaining('Send 0'), findsNothing);
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('idle trip is sent after the pause counted from my last mark', (
     tester,
   ) async {

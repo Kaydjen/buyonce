@@ -385,6 +385,16 @@ class InMemoryListService implements ListService {
   Future<Result<void>> updateTripMarks(Trip trip) async =>
       _write(trip.groupId, 'trips', () => _trips[trip.id] = trip);
 
+  @override
+  Future<Result<void>> setAutoSendAt(Trip trip, DateTime? at) async {
+    final current = _trips[trip.id];
+    if (current == null) return const Ok<void>(null);
+    _trips[trip.id] = at == null
+        ? current.copyWith(clearAutoSend: true)
+        : current.copyWith(autoSendAt: at);
+    return const Ok<void>(null);
+  }
+
   /// Plays the server's part too: sent planned products leave the plan, count one more
   /// trip, and every recipient gets a notice.
   @override

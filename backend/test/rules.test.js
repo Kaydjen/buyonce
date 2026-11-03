@@ -401,6 +401,15 @@ describe('member settings', () => {
     await assertFails(updateDoc(doc(as('bob'), 'groups/g1/members/bob'), { askedAt: Timestamp.fromMillis(0) }));
   });
 
+  it('a member keeps working with a Worker field askPushedFor but cannot write it', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), 'groups/g1/members/bob'), { askPushedFor: Timestamp.fromMillis(1) });
+    });
+    await assertSucceeds(updateDoc(doc(as('bob'), 'groups/g1/members/bob'), { askedAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(doc(as('bob'), 'groups/g1/members/bob'), { muted: true }));
+    await assertFails(updateDoc(doc(as('bob'), 'groups/g1/members/bob'), { askPushedFor: Timestamp.fromMillis(2) }));
+  });
+
   it('members see each other', async () => {
     await assertSucceeds(getDoc(doc(as('bob'), 'groups/g1/members/alice')));
   });

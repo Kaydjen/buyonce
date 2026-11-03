@@ -9,6 +9,7 @@ class Trip {
     required this.startedAt,
     this.marks = const [],
     this.sentAt,
+    this.autoSendAt,
   });
 
   final String id;
@@ -20,14 +21,23 @@ class Trip {
   /// Null while the trip is open.
   final DateTime? sentAt;
 
+  /// When the server sends the trip if the phone does not (cron); null: never.
+  final DateTime? autoSendAt;
+
   bool get isOpen => sentAt == null;
 
-  Trip copyWith({List<TripMark>? marks, DateTime? sentAt}) => Trip(
+  Trip copyWith({
+    List<TripMark>? marks,
+    DateTime? sentAt,
+    DateTime? autoSendAt,
+    bool clearAutoSend = false,
+  }) => Trip(
     id: id,
     groupId: groupId,
     userId: userId,
     startedAt: startedAt,
     marks: marks ?? this.marks,
     sentAt: sentAt ?? this.sentAt,
+    autoSendAt: clearAutoSend ? null : autoSendAt ?? this.autoSendAt,
   );
 }

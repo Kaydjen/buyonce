@@ -8,7 +8,10 @@ import 'core/theme/app_theme.dart';
 import 'data/services/firebase_account_service.dart';
 import 'data/services/firebase_group_service.dart';
 import 'data/services/firebase_list_service.dart';
+import 'data/services/firebase_push_service.dart';
 import 'data/services/firebase_user_service.dart';
+import 'data/services/http_send_worker.dart';
+import 'data/services/identity.dart';
 import 'data/services/service_providers.dart';
 import 'domain/models/app_settings.dart';
 import 'presentation/view_models/settings/style_variant_view_model.dart';
@@ -18,6 +21,9 @@ import 'presentation/screens/app_gate.dart';
 // Web client id from google-services.json (client_type 3); not a secret.
 const _serverClientId =
     '548461971411-fvv7f3ukkvduf26lahoouku616ibih8a.apps.googleusercontent.com';
+
+// The Cloudflare Worker that finishes a send (backend/worker); deployed in plan step 61.6.
+const _workerUrl = 'https://buyonce-worker.olive-lantern-4x9.workers.dev';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,8 +36,11 @@ Future<void> main() async {
       overrides: [
         realAccountServiceProvider.overrideWithValue(FirebaseAccountService()),
         realGroupServiceProvider.overrideWithValue(FirebaseGroupService()),
-        realListServiceProvider.overrideWithValue(FirebaseListService()),
+        realListServiceProvider.overrideWithValue(
+          FirebaseListService(worker: HttpSendWorker(_workerUrl)),
+        ),
         realUserServiceProvider.overrideWithValue(FirebaseUserService()),
+        realPushServiceProvider.overrideWithValue(FirebasePushService()),
       ],
       child: const BuyOnceApp(),
     ),
@@ -43,6 +52,7 @@ class BuyOnceApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(pushRegistrationProvider);
     final variant = ref.watch(styleVariantProvider);
     return MaterialApp(
       debugShowCheckedModeBanner: false,

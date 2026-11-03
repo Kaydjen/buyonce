@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "firebase emulators:exec --only firestore --project demo-buyonce \"node --test test/rules.test.js\""
+    "test": "firebase emulators:exec --only firestore --project demo-buyonce \"node --test --test-concurrency=1 test/rules.test.js worker/test/emulator.test.js\""
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^6.0.0",

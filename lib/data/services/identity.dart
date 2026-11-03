@@ -37,6 +37,14 @@ final realUserIdProvider = NotifierProvider<RealUserId, String?>(
   RealUserId.new,
 );
 
+/// Keeps this phone's push token saved for the signed-in user (watched by the app root).
+/// Sign-out removes it first, in [AccountRepository].
+final pushRegistrationProvider = Provider<void>((ref) {
+  final push = ref.watch(realPushServiceProvider);
+  final uid = ref.watch(realUserIdProvider);
+  if (push != null && uid != null) push.register(uid);
+});
+
 /// The user whose data the app shows: the real uid while the person holding the phone
 /// is signed in for real, else the fake slot. Data of a real uid lives on Firestore,
 /// data of a fake id in memory.

@@ -1,0 +1,12 @@
+{
+  "name": "buyonce-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/worker.test.js",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.156.2"
+  }
+}

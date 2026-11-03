@@ -10,12 +10,21 @@ import '../../domain/models/product.dart';
 import '../../domain/models/trip.dart';
 import '../../domain/models/trip_mark.dart';
 import 'list_service.dart';
+import 'send_worker.dart';
 
 typedef Doc = Map<String, dynamic>;
 
 /// A server time that has not come back yet reads as null: the document is brand new.
 DateTime _time(Object? value) =>
     value is Timestamp ? value.toDate() : DateTime.now();
+
+/// The time of my last ask. The server stamps it, so right after the write it is still
+/// null in the local data: with the write pending that is "just now", not "never"
+/// (otherwise the products just announced would count as new again).
+DateTime? askedAtFromData(Object? value, {required bool hasPendingWrites}) {
+  if (value is Timestamp) return value.toDate();
+  return hasPendingWrites ? DateTime.now() : null;
+}
 
 Product productFromData(String groupId, String id, Doc data) => Product(
   id: id,
@@ -45,6 +54,7 @@ Trip tripFromData(String groupId, String id, Doc data) {
         ),
     ]..sort((a, b) => a.markedAt.compareTo(b.markedAt)),
     sentAt: data['sentAt'] == null ? null : _time(data['sentAt']),
+    autoSendAt: data['autoSendAt'] == null ? null : _time(data['autoSendAt']),
   );
 }
 
@@ -100,12 +110,17 @@ Map<String, Object?> productChange(
 /// background; a refusal arrives through [writeErrors]. The getters read the local data
 /// (kept fresh by the live listeners); only the history asks the server.
 class FirebaseListService implements ListService {
-  FirebaseListService({FirebaseFirestore? db, String Function()? uid})
-    : _db = db ?? FirebaseFirestore.instance,
-      _uid = uid ?? (() => FirebaseAuth.instance.currentUser?.uid ?? '');
+  FirebaseListService({
+    FirebaseFirestore? db,
+    String Function()? uid,
+    SendWorker? worker,
+  }) : _worker = worker, // ignore: prefer_initializing_formals
+       _db = db ?? FirebaseFirestore.instance,
+       _uid = uid ?? (() => FirebaseAuth.instance.currentUser?.uid ?? '');
 
   final FirebaseFirestore _db;
   final String Function() _uid;
+  final SendWorker? _worker;
 
   final _errors = StreamController<ListWriteError>.broadcast();
   final _onlineChanges = StreamController<bool>.broadcast();
@@ -268,8 +283,10 @@ class FirebaseListService implements ListService {
   Future<Result<DateTime?>> getAskedAt(String groupId, String userId) =>
       _guard(() async {
         final doc = await _docLocal(_member(groupId, userId));
-        final at = doc.data()?['askedAt'];
-        return at == null ? null : _time(at);
+        return askedAtFromData(
+          doc.data()?['askedAt'],
+          hasPendingWrites: doc.metadata.hasPendingWrites,
+        );
       });
 
   @override
@@ -433,6 +450,8 @@ class FirebaseListService implements ListService {
         'startedAt': FieldValue.serverTimestamp(),
         'marks': marksToData(trip.marks),
         'open': true,
+        if (trip.autoSendAt != null)
+          'autoSendAt': Timestamp.fromDate(trip.autoSendAt!),
       }),
     );
     return const Ok<void>(null);
@@ -449,8 +468,23 @@ class FirebaseListService implements ListService {
     return const Ok<void>(null);
   }
 
+  /// How long the server waits for the phone's own call before it sends the trip itself.
+  static const sendLease = Duration(minutes: 2);
+
+  @override
+  Future<Result<void>> setAutoSendAt(Trip trip, DateTime? at) async {
+    _report(
+      _col(trip.groupId, 'trips').doc(trip.id).update({
+        'autoSendAt': at == null ? FieldValue.delete() : Timestamp.fromDate(at),
+      }),
+    );
+    return const Ok<void>(null);
+  }
+
   /// One batch: the trip closes (server time) and the planned flags of its products
-  /// clear. The count in `usage` and the notices are the Worker's (step 61).
+  /// clear, so this phone shows the result at once. The lease `autoSendAt` makes the
+  /// server finish the send if the call below does not get through. The count in
+  /// `usage`, the notices and the push are the Worker's.
   @override
   Future<Result<void>> closeTrip(Trip trip, {required List<String> notify}) =>
       _guard(() async {
@@ -459,6 +493,7 @@ class FirebaseListService implements ListService {
         batch.update(_col(trip.groupId, 'trips').doc(trip.id), {
           'sentAt': FieldValue.serverTimestamp(),
           'open': false,
+          'autoSendAt': Timestamp.fromDate(DateTime.now().add(sendLease)),
         });
         for (final m in trip.marks) {
           if (planned[m.productId] == true) {
@@ -469,10 +504,21 @@ class FirebaseListService implements ListService {
             });
           }
         }
-        _report(batch.commit());
+        final committed = batch.commit();
+        _report(committed);
+        // Only a trip the server has seen closed can be finished; offline this waits.
+        final worker = _worker;
+        if (worker != null) {
+          unawaited(
+            committed
+                .then((_) => worker.finishSend(trip.groupId, trip.id))
+                .catchError((Object _) {}),
+          );
+        }
       });
 
-  /// Stamps the time of the ask; the notices are the Worker's (step 61).
+  /// Stamps the time of the ask (server time); once the server has it, the Worker is
+  /// called and answers the ask only if the stamp is fresh. Notices and push are its.
   @override
   Future<Result<void>> ask(
     String groupId,
@@ -480,12 +526,19 @@ class FirebaseListService implements ListService {
     List<String> productIds, {
     required List<String> notify,
   }) async {
-    _report(
-      _member(
-        groupId,
-        userId,
-      ).update({'askedAt': FieldValue.serverTimestamp()}),
-    );
+    final stamped = _member(
+      groupId,
+      userId,
+    ).update({'askedAt': FieldValue.serverTimestamp()});
+    _report(stamped);
+    final worker = _worker;
+    if (worker != null) {
+      unawaited(
+        stamped
+            .then((_) => worker.finishAsk(groupId, productIds))
+            .catchError((Object _) {}),
+      );
+    }
     return const Ok<void>(null);
   }
 

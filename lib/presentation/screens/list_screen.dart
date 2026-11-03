@@ -454,13 +454,19 @@ class _ListScreenState extends ConsumerState<ListScreen>
 
   Future<void> _notify() async {
     Haptics.send(context);
+    final word = _isPersonal ? 'Done' : 'Sent';
+    // The confirmation appears with the press, not after the answer: the marks leave the
+    // state at once, and the button would start to slide out before it could confirm.
+    final expected =
+        ref.read(listViewModelProvider).value?.myMarkIds.length ?? 0;
+    _confirmSent(ask: false, text: '$word $expected', count: expected);
     final count = await ref.read(listViewModelProvider.notifier).notify();
     if (!mounted) return;
-    _confirmSent(
-      ask: false,
-      text: '${_isPersonal ? 'Done' : 'Sent'} $count',
-      count: count,
-    );
+    if (count == 0) {
+      _clearSent();
+    } else if (count != expected) {
+      _confirmSent(ask: false, text: '$word $count', count: count);
+    }
   }
 
   /// The button that was pressed says what happened for two seconds, then goes.
@@ -479,9 +485,21 @@ class _ListScreenState extends ConsumerState<ListScreen>
 
   Future<void> _ask() async {
     Haptics.send(context);
+    final expected =
+        ref.read(listViewModelProvider).value?.askProducts.length ?? 0;
+    _confirmSent(ask: true, text: 'Notified $expected', count: expected);
     final count = await ref.read(listViewModelProvider.notifier).ask();
     if (!mounted) return;
-    _confirmSent(ask: true, text: 'Notified $count', count: count);
+    if (count == 0) {
+      _clearSent();
+    } else if (count != expected) {
+      _confirmSent(ask: true, text: 'Notified $count', count: count);
+    }
+  }
+
+  void _clearSent() {
+    _sentTimer?.cancel();
+    setState(() => _sent = null);
   }
 
   /// A tap on a product that is already taken: a short note at the bottom, it goes

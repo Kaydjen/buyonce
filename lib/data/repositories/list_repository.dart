@@ -379,6 +379,16 @@ class ListRepository {
     return _saveTrip(open, trip.copyWith(marks: marks));
   });
 
+  /// Tells the server when to send the user's open trip if the phone cannot (null:
+  /// never). No open trip, nothing to do.
+  Future<Result<void>> setAutoSendAt(String userId, DateTime? at) =>
+      _service.getOpenTrips(groupId).andThen((trips) {
+        final open = trips.where((t) => t.userId == userId).firstOrNull;
+        return open == null
+            ? Future.value(const Ok<void>(null))
+            : _service.setAutoSendAt(open, at);
+      });
+
   /// The first mark creates the trip, later ones replace its marks.
   Future<Result<void>> _saveTrip(Trip? open, Trip trip) =>
       open == null ? _service.createTrip(trip) : _service.updateTripMarks(trip);

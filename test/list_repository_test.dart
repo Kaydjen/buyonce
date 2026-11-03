@@ -27,6 +27,7 @@ Future<List<String>> names(ListRepository repo) async {
 }
 
 void main() {
+  autoSendAtTests();
   test('sort by frequency puts the most bought first', () async {
     final repo = newRepo();
     await repo.sortBy(SortKey.frequency);
@@ -338,5 +339,26 @@ void main() {
       await repo.sortBy(SortKey.recent);
       expect(await names(repo), ['new', 'old']);
     });
+  });
+}
+
+void autoSendAtTests() {
+  test('the server deadline of an open trip is set and removed', () async {
+    final repo = newRepo();
+    await repo.toggleMark('seed0', 'me');
+    final at = DateTime(2030, 1, 1, 12);
+
+    await repo.setAutoSendAt('me', at);
+    var trips = ((await repo.getOpenTrips()) as Ok<List<Trip>>).value;
+    expect(trips.single.autoSendAt, at);
+
+    await repo.setAutoSendAt('me', null);
+    trips = ((await repo.getOpenTrips()) as Ok<List<Trip>>).value;
+    expect(trips.single.autoSendAt, isNull);
+  });
+
+  test('a deadline without an open trip does nothing', () async {
+    final repo = newRepo();
+    expect(await repo.setAutoSendAt('me', DateTime(2030)), isA<Ok<void>>());
   });
 }

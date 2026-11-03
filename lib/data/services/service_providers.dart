@@ -8,6 +8,7 @@ import 'in_memory_list_service.dart';
 import 'in_memory_update_service.dart';
 import 'in_memory_user_service.dart';
 import 'list_service.dart';
+import 'push_service.dart';
 import 'update_service.dart';
 import 'user_service.dart';
 
@@ -34,6 +35,9 @@ final inMemoryAccountServiceProvider = Provider(
 final updateServiceProvider = Provider<UpdateService>(
   (ref) => InMemoryUpdateService(),
 );
+
+/// The push token on Firestore; null in tests, `main` sets it (see `identity.dart`).
+final realPushServiceProvider = Provider<PushService?>((ref) => null);
 
 /// The real Google sign-in; null in tests, `main` sets the Firebase one.
 final realAccountServiceProvider = Provider<AccountService?>((ref) => null);

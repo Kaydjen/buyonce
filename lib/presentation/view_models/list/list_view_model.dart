@@ -48,6 +48,9 @@ final idleTimersProvider = Provider<Map<String, Timer>>((ref) {
 });
 
 /// When each idle timer fires, by the same key; the Shop shows it as "Auto · 15:20".
+/// How much later than the phone's own timer the server sends an idle trip.
+const serverSendGrace = Duration(seconds: 30);
+
 final idleDeadlinesProvider = Provider<Map<String, DateTime>>((_) => {});
 
 class ListViewModel extends AsyncNotifier<ListState> {
@@ -183,12 +186,17 @@ class ListViewModel extends AsyncNotifier<ListState> {
     final deadlines = ref.read(idleDeadlinesProvider);
     deadlines.remove(key);
     final delay = ref.read(autoNotifyDelayProvider);
+    final groupId = _groupId;
+    final repo = ref.read(listRepositoryForProvider(groupId));
     if (!hasMarks || delay == null) {
       state = AsyncData(state.requireValue.copyWith(clearAutoSend: true));
+      unawaited(repo.setAutoSendAt(userId, null));
       return;
     }
-    final groupId = _groupId;
     final deadline = DateTime.now().add(delay);
+    // The server's copy of the deadline: if this phone is dead by then, the server sends
+    // the trip. The grace lets the phone's own timer go first when it is alive.
+    unawaited(repo.setAutoSendAt(userId, deadline.add(serverSendGrace)));
     deadlines[key] = deadline;
     state = AsyncData(state.requireValue.copyWith(autoSendAt: deadline));
     timers[key] = Timer(delay, () => _sendIdleTrip(groupId, userId));
@@ -477,13 +485,14 @@ class ListViewModel extends AsyncNotifier<ListState> {
       final result = await repo.ask(userId, ids);
       if (result case Ok(:final value)) {
         count = value;
-        // The time of this Ask decides which products the next one announces.
-        final asked = await repo.getAskedAt(userId);
-        if (asked case Ok(:final value) when state.hasValue) {
+        // The time of this Ask decides which products the next one announces. It is
+        // "now" here: the server stamps the stored value later, and a read right after
+        // the write may not see it yet.
+        if (count > 0 && state.hasValue) {
           state = AsyncData(
             state.requireValue.withSession(
               newSince: state.requireValue.newSince,
-              askedAt: value,
+              askedAt: DateTime.now(),
             ),
           );
         }

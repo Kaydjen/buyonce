@@ -1,0 +1,11 @@
+name = "buyonce-worker"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+
+[vars]
+PROJECT = "buyonce-kaydjen"
+
+# Safety net and auto-send: due trips are found once a minute. The secret SA_JSON (service
+# account key of the Worker) is set with `wrangler secret put SA_JSON`, never committed.
+[triggers]
+crons = ["* * * * *"]

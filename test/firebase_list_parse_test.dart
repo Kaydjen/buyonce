@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  askedAtTests();
   final t0 = DateTime.utc(2026, 11, 1, 10);
 
   test(
@@ -136,4 +137,19 @@ void main() {
       expect(untouched.containsKey('usage'), isFalse);
     },
   );
+}
+
+void askedAtTests() {
+  test('a pending server stamp of the ask means just now, not never', () {
+    final before = DateTime.now();
+    final pending = askedAtFromData(null, hasPendingWrites: true);
+    expect(pending, isNotNull);
+    expect(pending!.isBefore(before), isFalse);
+    expect(askedAtFromData(null, hasPendingWrites: false), isNull);
+    final stamp = Timestamp.fromDate(DateTime(2026, 11, 3, 12));
+    expect(
+      askedAtFromData(stamp, hasPendingWrites: true),
+      DateTime(2026, 11, 3, 12),
+    );
+  });
 }
