@@ -29,8 +29,13 @@ class GroupScreen extends ConsumerWidget {
         ?.where((g) => g.id == groupId)
         .firstOrNull;
     final userId = ref.watch(currentUserIdProvider);
-    // The group is gone (left or deleted): the screen closes itself.
-    if (group == null) return const Scaffold();
+    // The group is gone (left, deleted or removed elsewhere): close the screen.
+    if (group == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) Navigator.of(context).maybePop();
+      });
+      return const Scaffold();
+    }
     final owner = group.ownerId == userId;
     final vm = ref.read(groupsViewModelProvider.notifier);
     return Scaffold(

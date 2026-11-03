@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'account_service.dart';
+import 'no_update_service.dart';
 import 'group_service.dart';
 import 'in_memory_account_service.dart';
 import 'in_memory_group_service.dart';
@@ -32,8 +34,10 @@ final inMemoryAccountServiceProvider = Provider(
   (ref) => InMemoryAccountService(),
 );
 
+/// The fake (a newer version always exists) only in debug builds; a release has no
+/// update source yet.
 final updateServiceProvider = Provider<UpdateService>(
-  (ref) => InMemoryUpdateService(),
+  (ref) => kDebugMode ? InMemoryUpdateService() : NoUpdateService(),
 );
 
 /// The push token on Firestore; null in tests, `main` sets it (see `identity.dart`).

@@ -54,6 +54,9 @@ const serverSendGrace = Duration(seconds: 30);
 final idleDeadlinesProvider = Provider<Map<String, DateTime>>((_) => {});
 
 class ListViewModel extends AsyncNotifier<ListState> {
+  /// Counts the builds (see the stale check in [build]).
+  int _generation = 0;
+
   @override
   Future<ListState> build() async {
     // Switching auto-send off stops the running countdowns; a new period only
@@ -61,6 +64,17 @@ class ListViewModel extends AsyncNotifier<ListState> {
     ref.listen(autoNotifyDelayProvider, (_, delay) {
       if (delay != null) return;
       final timers = ref.read(idleTimersProvider);
+      // The server holds a lease for each running countdown: drop it too, or the
+      // cron would still send the trip.
+      for (final key in timers.keys) {
+        final at = key.indexOf('/');
+        if (at < 0) continue;
+        unawaited(
+          ref
+              .read(listRepositoryForProvider(key.substring(0, at)))
+              .setAutoSendAt(key.substring(at + 1), null),
+        );
+      }
       for (final timer in timers.values) {
         timer.cancel();
       }
@@ -76,7 +90,18 @@ class ListViewModel extends AsyncNotifier<ListState> {
     final repo = ref.watch(listRepositoryProvider);
     // A user switch (debug) starts the list over for that user.
     final userId = ref.watch(currentUserIdProvider);
+    final subscriptions = <StreamSubscription<Object?>>[];
+    ref.onDispose(() {
+      for (final subscription in subscriptions) {
+        subscription.cancel();
+      }
+    });
+    final generation = ++_generation;
+    // A build that was replaced while it waited (another group or user became active)
+    // must not subscribe: its listeners would write the old group into the new state.
+    bool stale() => generation != _generation;
     _unwrap(await repo.sendStaleTrips(onlyUser: userId));
+    if (stale()) return Completer<ListState>().future;
 
     // The four live lists. The first value of each arrives at once from a local
     // store; later values follow every change, my own writes included.
@@ -87,6 +112,7 @@ class ListViewModel extends AsyncNotifier<ListState> {
     var built = false;
     final loaded = Completer<void>();
     void changed() {
+      if (stale()) return;
       if (products == null ||
           trips == null ||
           plans == null ||
@@ -125,7 +151,7 @@ class ListViewModel extends AsyncNotifier<ListState> {
       }
     });
 
-    final subscriptions = [
+    subscriptions.addAll([
       listen(repo.watchProducts(), (v) => products = v),
       listen(repo.watchOpenTrips(), (v) => trips = v),
       listen(repo.watchPlans(), (v) => plans = v),
@@ -136,14 +162,11 @@ class ListViewModel extends AsyncNotifier<ListState> {
       repo.online.listen(
         (online) => ref.read(offlineProvider.notifier).set(!online),
       ),
-    ];
-    ref.onDispose(() {
-      for (final subscription in subscriptions) {
-        subscription.cancel();
-      }
-    });
+    ]);
     await loaded.future;
+    if (stale()) return Completer<ListState>().future;
     final session = await _session(repo, userId);
+    if (stale()) return Completer<ListState>().future;
     // No await from here to the return: a change arriving later updates the state.
     built = true;
     final initial =
@@ -254,6 +277,7 @@ class ListViewModel extends AsyncNotifier<ListState> {
         mode: mode,
         query: '',
         finding: false,
+        clearFlash: true,
         // Coming to Shop ranks the Frequent card again; staying keeps it.
         rankFrequent: mode == ListMode.buy && current.mode != ListMode.buy,
       ),
@@ -518,6 +542,16 @@ class ListViewModel extends AsyncNotifier<ListState> {
     return _apply((repo) => repo.markNoticesSeen(userId));
   }
 
+  /// Marks the notices that came more than [age] ago as seen; newer ones stay.
+  Future<void> dismissNoticesOlderThan(Duration age) {
+    final userId = ref.read(currentUserIdProvider);
+    final before = DateTime.now().subtract(age);
+    return _apply((repo) => repo.markNoticesSeen(userId, sentBefore: before));
+  }
+
+  /// A notice nobody read for this long is not news any more.
+  static const noticeLifetime = Duration(hours: 24);
+
   /// The lists are live and need no reload. This does the checks of a visit: sends a
   /// trip left from a past day, and counts "New" and the last "Notify" again.
   Future<void> refresh() async {
@@ -525,6 +559,11 @@ class ListViewModel extends AsyncNotifier<ListState> {
     final repo = ref.read(listRepositoryProvider);
     _unwrap(
       await repo.sendStaleTrips(onlyUser: ref.read(currentUserIdProvider)),
+    );
+    // An old notice does not hang in the banner for ever (a failure changes nothing).
+    await repo.markNoticesSeen(
+      ref.read(currentUserIdProvider),
+      sentBefore: DateTime.now().subtract(noticeLifetime),
     );
     final session = await _session(repo, ref.read(currentUserIdProvider));
     if (!ref.mounted || !state.hasValue) return;

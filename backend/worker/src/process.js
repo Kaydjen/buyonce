@@ -26,7 +26,8 @@ export async function processTrip(api, tripDoc) {
   const claimed = await api.claim(tripDoc, new Date(now.getTime() + LEASE_MS));
   if (!claimed) return { status: 'lost' };
 
-  const marks = Object.keys(claimed.fields.marks ?? {});
+  // Keys become document paths: anything that is not a plain id is ignored.
+  const marks = Object.keys(claimed.fields.marks ?? {}).filter((id) => /^[A-Za-z0-9_-]{1,64}$/.test(id));
   const members = await api.listDocs(`${groupPath}/members`);
   const recipients = recipientIds(members, claimed.fields.userId);
   const products = await api.getDocs(marks.map((id) => `${groupPath}/products/${id}`));
@@ -51,7 +52,10 @@ export async function processTrip(api, tripDoc) {
       const user = users.get(`users/${uid}`);
       const token = user?.fields.fcmToken;
       if (!token) continue;
-      const result = await api.push({ token, ...text, data: { kind: 'bought', groupId: groupPath.split('/')[1] } });
+      // One bad token must not stop the others, nor make the trip run again.
+      const result = await api
+        .push({ token, ...text, data: { kind: 'bought', groupId: groupPath.split('/')[1] } })
+        .catch(() => 'failed');
       if (result === 'ok') pushed += 1;
       else if (result === 'unregistered') {
         // Only if the token is still the one that failed (updateTime precondition).
@@ -100,11 +104,13 @@ export async function processAsk(api, member, productIds) {
   for (const uid of recipients) {
     const user = users.get(`users/${uid}`);
     if (!user?.fields.fcmToken) continue;
-    const result = await api.push({
-      token: user.fields.fcmToken,
-      ...text,
-      data: { kind: 'needed', groupId: groupPath.split('/')[1] },
-    });
+    const result = await api
+      .push({
+        token: user.fields.fcmToken,
+        ...text,
+        data: { kind: 'needed', groupId: groupPath.split('/')[1] },
+      })
+      .catch(() => 'failed');
     if (result === 'ok') pushed += 1;
     else if (result === 'unregistered') {
       await api.commit([{ path: user.path, remove: ['fcmToken'], must: { updateTime: user.updateTime } }]).catch(() => {});

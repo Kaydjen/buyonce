@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -7,7 +8,6 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/models/group.dart';
-import '../../domain/models/notice.dart';
 import '../../domain/models/product.dart';
 import '../../core/theme/app_tokens.dart';
 import '../view_models/account/account_view_model.dart';
@@ -108,6 +108,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
   Timer? _sentTimer;
   double _lastKeyboardInset = 0;
   DateTime? _pausedAt;
+  static const _noticeReadTime = Duration(seconds: 10);
 
   /// Away from the app this long counts as a new visit: Frequent is ranked again and
   /// the "New" group is counted from the start of the visit.
@@ -248,6 +249,13 @@ class _ListScreenState extends ConsumerState<ListScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
       _pausedAt = DateTime.now();
+      // The user has read what was on this screen; a notice that came in the last
+      // seconds may not have been seen and stays.
+      if (ModalRoute.of(context)?.isCurrent ?? false) {
+        ref
+            .read(listViewModelProvider.notifier)
+            .dismissNoticesOlderThan(_noticeReadTime);
+      }
     } else if (state == AppLifecycleState.resumed) {
       final left = _pausedAt;
       _pausedAt = null;
@@ -515,10 +523,11 @@ class _ListScreenState extends ConsumerState<ListScreen>
     await ref.read(listViewModelProvider.notifier).selectUser(id);
   }
 
-  List<String> _noticeLines(ListState s) => [
-    for (final n in s.notices)
-      '${ref.watch(userNameProvider(n.fromUserId))} ${n.kind == NoticeKind.needed ? 'needs' : 'bought'}: ${[for (final id in n.productIds) s.products.where((p) => p.id == id).map((p) => p.name).firstOrNull ?? '?'].join(', ')}',
-  ];
+  List<String> _noticeLines(ListState s) => noticeLines(
+    s.notices,
+    s.products,
+    (userId) => ref.watch(userNameProvider(userId)),
+  );
 
   bool get _signedIn => ref.read(accountViewModelProvider).value != null;
 
@@ -711,7 +720,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
           ),
         _header(s),
         if (shop && s.othersTaken.isNotEmpty) _presence(s),
-        if (s.notices.isNotEmpty)
+        if (_noticeLines(s).isNotEmpty)
           NoticeBanner(lines: _noticeLines(s), onDismiss: vm.dismissNotices),
       ],
     );
@@ -1189,7 +1198,9 @@ class _TopOverListLayout extends MultiChildLayoutDelegate {
     positionChild(_Slot.top, Offset.zero);
     layoutChild(
       _Slot.list,
-      BoxConstraints.tight(Size(size.width, size.height - top.height)),
+      BoxConstraints.tight(
+        Size(size.width, math.max(0, size.height - top.height)),
+      ),
     );
     positionChild(_Slot.list, Offset(0, top.height));
   }

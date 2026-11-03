@@ -57,6 +57,8 @@ class FirebasePushService implements PushService {
       _refresh = _messaging.onTokenRefresh.listen((t) => _save(userId, t));
     } catch (error) {
       debugPrint('push registration failed: $error');
+      // Let the next call try again (offline start, service not available).
+      if (_userId == userId) _userId = null;
     }
   }
 

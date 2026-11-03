@@ -50,13 +50,20 @@ android {
 
     buildTypes {
         release {
-            // Without key.properties (another machine) the release keeps the debug key.
-            signingConfig = if (keystoreProperties.isNotEmpty()) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
-            }
+            signingConfig = signingConfigs.getByName(
+                if (keystoreProperties.isNotEmpty()) "release" else "debug",
+            )
         }
+    }
+}
+
+// A release must never be signed with the debug key by accident (another machine).
+gradle.taskGraph.whenReady {
+    val releaseBuild = allTasks.any {
+        it.name.contains("Release") && (it.name.startsWith("assemble") || it.name.startsWith("bundle"))
+    }
+    if (releaseBuild && keystoreProperties.isEmpty()) {
+        throw GradleException("android/key.properties is missing: no release without the release key")
     }
 }
 
