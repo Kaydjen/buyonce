@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/result.dart';
 import '../../../data/repositories/group_repository.dart';
 import '../../../data/repositories/list_repository.dart';
+import '../../../data/repositories/local_list_merger.dart';
 import '../../../domain/models/group.dart';
 import '../account/account_view_model.dart';
 import '../../../data/services/identity.dart';
@@ -147,6 +150,17 @@ final pushOpenProvider = Provider<void>((ref) {
     onError: (Object _) {},
   );
   ref.onDispose(subscription.cancel);
+});
+
+/// Once the account's personal list exists, the products of the local-mode list move
+/// into it (watched by the app root). It repeats on every start until it worked.
+final localMergeProvider = Provider<void>((ref) {
+  final merger = ref.watch(localListMergerProvider);
+  final uid = ref.watch(realUserIdProvider);
+  final groups = ref.watch(groupsViewModelProvider).value;
+  if (merger == null || uid == null || groups == null) return;
+  if (!groups.any((g) => g.id == personalGroupId(uid))) return;
+  unawaited(merger.merge(uid));
 });
 
 /// The list repository of the group shown now.

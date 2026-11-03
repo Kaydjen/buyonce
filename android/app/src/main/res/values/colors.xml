@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Accent of the app (#E5A25E): tints the small push icon. -->
+    <color name="notification_accent">#E5A25E</color>
+</resources>

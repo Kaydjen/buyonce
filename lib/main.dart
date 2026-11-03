@@ -12,6 +12,10 @@ import 'data/services/firebase_push_service.dart';
 import 'data/services/firebase_user_service.dart';
 import 'data/services/http_send_worker.dart';
 import 'data/services/identity.dart';
+import 'data/services/in_memory_list_service.dart';
+import 'data/services/local_list_store.dart';
+import 'data/services/settings_service.dart';
+import 'domain/models/group.dart';
 import 'data/services/service_providers.dart';
 import 'domain/models/app_settings.dart';
 import 'presentation/view_models/groups/groups_view_model.dart';
@@ -32,9 +36,14 @@ Future<void> main() async {
   await GoogleSignIn.instance.initialize(serverClientId: _serverClientId);
   // The page runs under the system bars; the screens keep their own safe areas.
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  // The list made without an account stays on the device between starts.
+  final localList = InMemoryListService();
+  final localListStore = LocalListStore(SettingsService());
+  await localListStore.attach(localList, personalGroupId(groupUserIds.first));
   runApp(
     ProviderScope(
       overrides: [
+        inMemoryListServiceProvider.overrideWithValue(localList),
         realAccountServiceProvider.overrideWithValue(FirebaseAccountService()),
         realGroupServiceProvider.overrideWithValue(FirebaseGroupService()),
         realListServiceProvider.overrideWithValue(
@@ -55,6 +64,7 @@ class BuyOnceApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(pushRegistrationProvider);
     ref.watch(pushOpenProvider);
+    ref.watch(localMergeProvider);
     final variant = ref.watch(styleVariantProvider);
     return MaterialApp(
       debugShowCheckedModeBanner: false,

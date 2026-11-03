@@ -11,6 +11,7 @@ import '../../domain/models/product.dart';
 import '../../domain/models/trip.dart';
 import '../../domain/models/trip_mark.dart';
 import 'list_service.dart';
+import 'list_snapshot.dart';
 
 /// Fake storage for the UX stage; replaced by a backend service later.
 class InMemoryListService implements ListService {
@@ -203,6 +204,30 @@ class InMemoryListService implements ListService {
   final _errors = StreamController<ListWriteError>.broadcast(sync: true);
   final _onlineChanges = StreamController<bool>.broadcast(sync: true);
   bool _isOnline = true;
+
+  /// A signal for every change, `group/kind` or `*` (the local mode saves its list on it).
+  Stream<String> get changes => _changed.stream;
+
+  /// The products, plans and trips of one group, to keep them on the device.
+  ListSnapshot snapshotOf(String groupId) => ListSnapshot(
+    products: _productsOf(groupId),
+    plans: _plansOf(groupId),
+    trips: _trips.values.where((t) => t.groupId == groupId).toList(),
+  );
+
+  /// Puts saved data back (before the first screen shows).
+  void restore(ListSnapshot snapshot) {
+    for (final p in snapshot.products) {
+      _products[p.id] = p;
+    }
+    for (final p in snapshot.plans) {
+      _plans[p.id] = p;
+    }
+    for (final t in snapshot.trips) {
+      _trips[t.id] = t;
+    }
+    _changed.add('*');
+  }
 
   /// Test and debug switch: a write shows at once, then, after [ackDelay], the "server"
   /// refuses it: the data goes back and [writeErrors] reports it.
