@@ -1,18 +1,35 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 import 'core/theme/app_theme.dart';
+import 'data/services/firebase_account_service.dart';
+import 'data/services/service_providers.dart';
 import 'domain/models/app_settings.dart';
 import 'presentation/view_models/settings/style_variant_view_model.dart';
 import 'presentation/view_models/settings/settings_view_model.dart';
 import 'presentation/screens/app_gate.dart';
 
-void main() {
+// Web client id from google-services.json (client_type 3); not a secret.
+const _serverClientId =
+    '548461971411-fvv7f3ukkvduf26lahoouku616ibih8a.apps.googleusercontent.com';
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
+  await GoogleSignIn.instance.initialize(serverClientId: _serverClientId);
   // The page runs under the system bars; the screens keep their own safe areas.
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-  runApp(const ProviderScope(child: BuyOnceApp()));
+  runApp(
+    ProviderScope(
+      overrides: [
+        realAccountServiceProvider.overrideWithValue(FirebaseAccountService()),
+      ],
+      child: const BuyOnceApp(),
+    ),
+  );
 }
 
 class BuyOnceApp extends ConsumerWidget {

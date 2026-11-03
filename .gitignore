@@ -46,3 +46,9 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Backend (rules tests)
+/backend/node_modules/
+
+# Firebase client config
+/android/app/google-services.json

@@ -1,0 +1,241 @@
+rules_version = '2';
+
+// Security is only these rules (no Cloud Functions on Spark). The Cloudflare Worker uses a
+// service account, which bypasses them; it alone writes `usage`, `finalizedAt`, `pushedAt`
+// and the notices. Data model: .ai/notes/backend-data-model.md.
+service cloud.firestore {
+  match /databases/{db}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function me() {
+      return request.auth.uid;
+    }
+
+    function groupPath(gid) {
+      return /databases/$(db)/documents/groups/$(gid);
+    }
+
+    function memberPath(gid, uid) {
+      return /databases/$(db)/documents/groups/$(gid)/members/$(uid);
+    }
+
+    function isMember(gid) {
+      return signedIn() && exists(memberPath(gid, me()));
+    }
+
+    function isGroupOwner(gid) {
+      return signedIn() && get(groupPath(gid)).data.ownerId == me();
+    }
+
+    function changed() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    function text(value, max) {
+      return value is string && value.size() >= 1 && value.size() <= max;
+    }
+
+    // Absent or null.
+    function unset(data, key) {
+      return data.get(key, null) == null;
+    }
+
+    // users/{uid}: private (the push token); only the owner reads and writes.
+    match /users/{uid} {
+      allow read, delete: if signedIn() && me() == uid;
+      allow create, update: if signedIn() && me() == uid
+        && request.resource.data.keys().hasOnly(['fcmToken', 'updatedAt'])
+        && text(request.resource.data.fcmToken, 4096)
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    // profiles/{uid}: the display name other members see. Readable by `get` only, so the
+    // ids of other users cannot be listed.
+    match /profiles/{uid} {
+      allow get: if signedIn();
+      allow delete: if signedIn() && me() == uid;
+      allow create, update: if signedIn() && me() == uid
+        && request.resource.data.keys().hasOnly(['displayName'])
+        && text(request.resource.data.displayName, 40);
+    }
+
+    // joinCodes/{code} -> groupId. `get` only: codes cannot be listed.
+    match /joinCodes/{code} {
+      allow get: if signedIn();
+      allow create: if signedIn()
+        && code.matches('^[A-Z0-9]{8}$')
+        && request.resource.data.keys().hasOnly(['groupId'])
+        && getAfter(groupPath(request.resource.data.groupId)).data.ownerId == me()
+        && getAfter(groupPath(request.resource.data.groupId)).data.inviteCode == code;
+      allow delete: if signedIn() && isGroupOwner(resource.data.groupId);
+    }
+
+    // "Which groups am I in": collection-group query on members by userId.
+    match /{path=**}/members/{m} {
+      allow read: if signedIn() && resource.data.userId == me();
+    }
+
+    match /groups/{gid} {
+
+      allow read: if isMember(gid);
+
+      // The creator's membership (and for a shared group the join code) is written in the
+      // same batch. A personal list has a fixed id and no code.
+      allow create: if signedIn()
+        && request.resource.data.ownerId == me()
+        && request.resource.data.keys().hasOnly(
+          ['name', 'utcOffsetMin', 'ownerId', 'personal', 'inviteCode', 'memberCount', 'createdAt'])
+        && text(request.resource.data.name, 60)
+        && request.resource.data.utcOffsetMin is int
+        && request.resource.data.utcOffsetMin >= -840
+        && request.resource.data.utcOffsetMin <= 840
+        && request.resource.data.memberCount == 1
+        && request.resource.data.createdAt == request.time
+        && existsAfter(memberPath(gid, me()))
+        && (request.resource.data.personal == true
+          ? gid == 'personal-' + me() && !('inviteCode' in request.resource.data)
+          : request.resource.data.personal == false
+            && request.resource.data.inviteCode.matches('^[A-Z0-9]{8}$')
+            && existsAfter(/databases/$(db)/documents/joinCodes/$(request.resource.data.inviteCode))
+            && getAfter(/databases/$(db)/documents/joinCodes/$(request.resource.data.inviteCode))
+                 .data.groupId == gid);
+
+      allow update: if signedIn() && (
+        // The owner: rename, time zone, pass ownership to a member, fix the counter.
+        (isGroupOwner(gid)
+          && changed().hasOnly(['name', 'utcOffsetMin', 'ownerId', 'memberCount'])
+          && text(request.resource.data.name, 60)
+          && request.resource.data.utcOffsetMin is int
+          && request.resource.data.memberCount is int
+          && request.resource.data.memberCount >= 1
+          && request.resource.data.memberCount <= 20
+          && existsAfter(memberPath(gid, request.resource.data.ownerId)))
+        // Anyone else touches only the member counter, one step per own join or leave.
+        || (changed().hasOnly(['memberCount'])
+          && resource.data.personal == false
+          && request.resource.data.memberCount <= 20
+          && ((request.resource.data.memberCount == resource.data.memberCount + 1
+                && !exists(memberPath(gid, me())) && existsAfter(memberPath(gid, me())))
+            || (request.resource.data.memberCount == resource.data.memberCount - 1
+                && exists(memberPath(gid, me())) && !existsAfter(memberPath(gid, me()))))));
+
+      allow delete: if isGroupOwner(gid);
+
+      match /members/{uid} {
+        allow read: if isMember(gid);
+
+        // Creator of the group, or a joiner who knows the code and takes the next free place.
+        allow create: if signedIn() && me() == uid
+          && request.resource.data.keys().hasOnly(['userId', 'joinedAt', 'muted', 'joinCode'])
+          && request.resource.data.userId == uid
+          && request.resource.data.joinedAt == request.time
+          && request.resource.data.muted == false
+          && (
+            (!exists(groupPath(gid)) && getAfter(groupPath(gid)).data.ownerId == uid)
+            || (exists(groupPath(gid))
+              && getAfter(groupPath(gid)).data.memberCount == get(groupPath(gid)).data.memberCount + 1
+              && getAfter(groupPath(gid)).data.memberCount <= 20
+              && get(/databases/$(db)/documents/joinCodes/$(request.resource.data.joinCode))
+                   .data.groupId == gid));
+
+        // Own settings only: mute, and when the member last asked for products.
+        allow update: if signedIn() && me() == uid
+          && changed().hasOnly(['muted', 'askedAt'])
+          && request.resource.data.muted is bool
+          && (!('askedAt' in changed()) || request.resource.data.askedAt == request.time);
+
+        // Leave, or the owner removes a member.
+        allow delete: if signedIn() && (me() == uid || isGroupOwner(gid));
+      }
+
+      match /products/{pid} {
+        allow read: if isMember(gid);
+
+        allow create: if isMember(gid)
+          && request.resource.data.keys().hasOnly(
+            ['name', 'position', 'planned', 'plannedBy', 'plannedAt', 'usage'])
+          && text(request.resource.data.name, 100)
+          && request.resource.data.position is number
+          && request.resource.data.usage == 0
+          && (request.resource.data.planned == true
+            ? request.resource.data.plannedBy == me() && request.resource.data.plannedAt == request.time
+            : request.resource.data.planned == false
+              && unset(request.resource.data, 'plannedBy')
+              && unset(request.resource.data, 'plannedAt'));
+
+        // `usage` is not in the list: only the Worker changes it.
+        allow update: if isMember(gid)
+          && changed().hasOnly(['name', 'position', 'planned', 'plannedBy', 'plannedAt'])
+          && text(request.resource.data.name, 100)
+          && request.resource.data.position is number
+          && (request.resource.data.planned == true
+            ? (resource.data.planned == true
+                ? !('plannedBy' in changed()) && !('plannedAt' in changed())
+                : request.resource.data.plannedBy == me() && request.resource.data.plannedAt == request.time)
+            : request.resource.data.planned == false
+              && unset(request.resource.data, 'plannedBy')
+              && unset(request.resource.data, 'plannedAt'));
+
+        allow delete: if isMember(gid);
+      }
+
+      // One document per trip of one user: only that user writes it, and only while open.
+      // `marks.<productId>` = when the product was taken.
+      match /trips/{tid} {
+        allow read: if isMember(gid);
+
+        allow create: if isMember(gid)
+          && request.resource.data.keys().hasOnly(['userId', 'startedAt', 'marks', 'autoSendAt'])
+          && request.resource.data.userId == me()
+          && request.resource.data.startedAt == request.time
+          && request.resource.data.marks is map
+          && request.resource.data.marks.size() <= 200
+          && (!('autoSendAt' in request.resource.data) || request.resource.data.autoSendAt is timestamp);
+
+        // Marks, the auto-send time and the one-way close (`sentAt`, server time). A sent
+        // trip is history: the client cannot touch it again.
+        allow update: if isMember(gid)
+          && resource.data.userId == me()
+          && unset(resource.data, 'sentAt')
+          && changed().hasOnly(['marks', 'autoSendAt', 'sentAt'])
+          && request.resource.data.marks is map
+          && request.resource.data.marks.size() <= 200
+          && (!('autoSendAt' in request.resource.data) || request.resource.data.autoSendAt is timestamp)
+          && (!('sentAt' in changed()) || request.resource.data.sentAt == request.time);
+
+        allow delete: if isMember(gid)
+          && ((resource.data.userId == me() && unset(resource.data, 'sentAt')) || isGroupOwner(gid));
+      }
+
+      match /plans/{planId} {
+        allow read: if isMember(gid);
+
+        allow create: if isMember(gid)
+          && request.resource.data.keys().hasOnly(['productIds', 'createdAt', 'pinned'])
+          && request.resource.data.productIds is list
+          && request.resource.data.productIds.size() <= 200
+          && request.resource.data.pinned is bool
+          && request.resource.data.createdAt == request.time;
+
+        allow update: if isMember(gid)
+          && changed().hasOnly(['createdAt', 'pinned'])
+          && request.resource.data.pinned is bool
+          && (!('createdAt' in changed()) || request.resource.data.createdAt == request.time);
+
+        allow delete: if isMember(gid);
+      }
+
+      // Written by the Worker only; the recipient reads, marks as seen and deletes.
+      match /notices/{nid} {
+        allow read: if isMember(gid) && resource.data.toUserId == me();
+        allow update: if isMember(gid) && resource.data.toUserId == me()
+          && changed().hasOnly(['seen'])
+          && request.resource.data.seen is bool;
+        allow delete: if isMember(gid) && (resource.data.toUserId == me() || isGroupOwner(gid));
+      }
+    }
+  }
+}

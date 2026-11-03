@@ -2,9 +2,10 @@ import 'package:flutter/foundation.dart';
 
 import '../../core/utils/result.dart';
 import '../../domain/models/account.dart';
+import 'account_service.dart';
 
 /// Fake Google sign-in for the UX stage; Firebase Auth replaces it.
-class InMemoryAccountService {
+class InMemoryAccountService implements AccountService {
   /// Debug builds start signed in as the two fake users; otherwise nobody is signed in.
   InMemoryAccountService({bool? seed}) {
     if (seed ?? kDebugMode) {
@@ -27,6 +28,7 @@ class InMemoryAccountService {
 
   final Map<String, Account> _accounts = {};
 
+  @override
   Future<Result<Account?>> getAccount(String userId) async =>
       Ok(_accounts[userId]);
 
@@ -34,6 +36,7 @@ class InMemoryAccountService {
   DebugSignInOutcome nextSignIn = DebugSignInOutcome.success;
 
   /// What the Google account chooser would return.
+  @override
   Future<Result<Account>> signIn(String userId) async {
     // A short wait so the progress state is visible.
     await Future<void>.delayed(const Duration(milliseconds: 600));
@@ -52,14 +55,17 @@ class InMemoryAccountService {
     return Ok(account);
   }
 
+  @override
   Future<Result<void>> signOut(String userId) async {
     _accounts.remove(userId);
     return const Ok(null);
   }
 
   /// Google asks for the password again before a risky action.
+  @override
   Future<Result<void>> reauthenticate(String userId) async =>
       failReauth ? const Failure(AccountError.reauthFailed) : const Ok(null);
 
+  @override
   Future<Result<void>> deleteAccount(String userId) => signOut(userId);
 }
