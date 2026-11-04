@@ -45,7 +45,7 @@ class FirebasePushService implements PushService {
     try {
       await _messaging.requestPermission();
       // Deprecated in favour of an installation id; this registration token is the one
-      // the push test (plan step 12) proved with FCM v1.
+      // the push test proved with FCM v1.
       // ignore: deprecated_member_use
       final token = await _messaging.getToken();
       if (_userId != userId) return; // signed out or switched while waiting

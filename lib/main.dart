@@ -28,7 +28,7 @@ import 'presentation/view_models/settings/style_variant_view_model.dart';
 const _serverClientId =
     '548461971411-fvv7f3ukkvduf26lahoouku616ibih8a.apps.googleusercontent.com';
 
-// The Cloudflare Worker that finishes a send (backend/worker); deployed in plan step 61.6.
+// The Cloudflare Worker that finishes a send (backend/worker).
 const _workerUrl = 'https://buyonce-worker.olive-lantern-4x9.workers.dev';
 
 Future<void> main() async {

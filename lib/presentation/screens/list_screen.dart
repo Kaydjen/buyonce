@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -341,7 +342,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
     });
   }
 
-  /// The search icon off its card: a plate that morphs from the flat tint button of the
+  /// The search icon off its card: a plate that morphs from the low plate of the
   /// card to the raised one of the bar as it glides (see [_flightState]).
   Widget _dockOverlay() {
     return Positioned.fill(
@@ -377,10 +378,12 @@ class _ListScreenState extends ConsumerState<ListScreen>
     final t = context.tokens;
     final plate = t.depth > 0
         ? DecoratedBox(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Color.lerp(t.tint, t.surface, p),
-              boxShadow: t.raised(0.6 * p),
+            // The card button's own look at the start (so it does not change when the
+            // icon leaves or lands), the lift of the bar icons at the end.
+            decoration: cardPlateLook(
+              t,
+              BoxShape.circle,
+              lift: lerpDouble(cardPlateLift, 0.6, p)!,
             ),
             child: SizedBox.square(
               dimension: _plate + (44 - _plate) * p,
@@ -1164,9 +1167,10 @@ class _ListScreenState extends ConsumerState<ListScreen>
   Widget? _markAllButton(ListState s, List<Product> card, Key key) =>
       s.untakenOf(card).isEmpty
       ? null
-      : CardTextAction(
+      : CardIconAction(
           key: key,
           onPressed: () => _markAll(card),
+          icon: Icons.check,
           label: context.l10n.markAll,
         );
 

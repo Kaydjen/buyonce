@@ -23,7 +23,7 @@ class HeaderBar extends StatelessWidget {
         borderRadius: t.pillTabs ? BorderRadius.circular(t.radiusCard) : null,
       ),
       padding: EdgeInsets.only(left: t.bigHeader ? t.gutter : 8, right: 4),
-      height: t.bigHeader ? (t.statusInline ? 60 : 72) : 56,
+      height: t.bigHeader ? 60 : 56,
       child: child,
     );
   }

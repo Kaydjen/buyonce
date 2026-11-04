@@ -285,7 +285,7 @@ class FirebaseGroupService implements GroupService {
 
   /// Members, the join code and the group go in one commit. The products, trips,
   /// plans and notices inside stay behind unreadable (nobody is a member any more);
-  /// removing them belongs to step 60.
+  /// removing them is not done here.
   @override
   Future<Result<void>> delete(String groupId) => _guard(() async {
     const fromServer = GetOptions(source: Source.server);

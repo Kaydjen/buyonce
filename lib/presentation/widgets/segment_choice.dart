@@ -97,7 +97,12 @@ class _Segment extends StatelessWidget {
                         .copyWith(color: chosen ? t.text : t.muted),
                     chosen ? t.titleWeight : t.bodyWeight,
                   ),
-                  child: child,
+                  // A long word (another language, large text) shrinks instead of
+                  // touching the ends of its segment.
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: FittedBox(fit: BoxFit.scaleDown, child: child),
+                  ),
                 ),
               ),
             ),

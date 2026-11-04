@@ -24,7 +24,7 @@ class CardTextAction extends StatelessWidget {
       onTap: onPressed,
       rightGap: 9,
       child: Ink(
-        decoration: _plateLook(t, BoxShape.rectangle),
+        decoration: cardPlateLook(t, BoxShape.rectangle),
         child: InkWell(
           borderRadius: BorderRadius.circular(t.radiusButton),
           onTap: onPressed,
@@ -50,9 +50,16 @@ class CardTextAction extends StatelessWidget {
 
 const double _plate = 38;
 
+/// The shadow scale of a plate that sits in its card.
+const double cardPlateLift = 0.18;
+
 /// The plate of a card button: the gradient and the shadow of the header plates, but a
 /// much lower lift, so it sits in the card instead of standing out of it.
-BoxDecoration _plateLook(AppTokens t, BoxShape shape) => BoxDecoration(
+BoxDecoration cardPlateLook(
+  AppTokens t,
+  BoxShape shape, {
+  double lift = cardPlateLift,
+}) => BoxDecoration(
   shape: shape,
   borderRadius: shape == BoxShape.circle
       ? null
@@ -62,7 +69,7 @@ BoxDecoration _plateLook(AppTokens t, BoxShape shape) => BoxDecoration(
     end: Alignment.bottomCenter,
     colors: [t.sheen ?? t.surface, t.surface],
   ),
-  boxShadow: t.raised(0.18),
+  boxShadow: t.raised(lift),
 );
 
 /// Makes a 38 dp plate react in a 48 dp area: [_slack] more on each side, which still
@@ -123,7 +130,7 @@ class CardIconAction extends StatelessWidget {
       child: Tooltip(
         message: label,
         child: Ink(
-          decoration: _plateLook(t, BoxShape.circle),
+          decoration: cardPlateLook(t, BoxShape.circle),
           child: InkWell(
             customBorder: const CircleBorder(),
             onTap: onPressed,

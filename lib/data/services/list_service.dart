@@ -24,8 +24,8 @@ class ListWriteError {
 ///
 /// Writes are split by what the security rules tell apart: a document is created with
 /// fixed starting values and updated only in some fields. The server alone writes
-/// `usage`, the notices and the "finalized" state of a sent trip (a Worker, step 61);
-/// until it exists [closeTrip] and [ask] stand in for it on the service side.
+/// `usage`, the notices and the "finalized" state of a sent trip (the Worker);
+/// [closeTrip] and [ask] only stand in for it in the in-memory service.
 abstract class ListService {
   Stream<Result<List<Product>>> watchProducts(String groupId);
 
@@ -86,9 +86,9 @@ abstract class ListService {
   Future<Result<void>> setAutoSendAt(Trip trip, DateTime? at);
 
   /// Sends the trip: it closes, the planned flags of its products are cleared, and the
-  /// server counts the trip in `usage` and tells [notify] (Worker, step 61; the
+  /// server counts the trip in `usage` and tells [notify] (the Worker; the
   /// in-memory service does all of it, the Firestore one only closes the trip and
-  /// clears the flags until then).
+  /// clears the flags).
   Future<Result<void>> closeTrip(Trip trip, {required List<String> notify});
 
   /// "Ask": remembers when [userId] asked, and tells [notify] that the products are

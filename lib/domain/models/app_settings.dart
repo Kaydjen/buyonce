@@ -21,7 +21,6 @@ class AppSettings {
   const AppSettings({
     this.autoSendEnabled = true,
     this.autoSendSeconds = defaultAutoSendSeconds,
-    // Light until the dark theme of design 7 is done (plan step 39); then System.
     this.theme = ThemeChoice.light,
     this.textScale = TextScaleChoice.system,
     this.language = LanguageChoice.system,

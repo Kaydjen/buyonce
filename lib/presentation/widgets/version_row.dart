@@ -26,7 +26,7 @@ class VersionRow extends ConsumerWidget {
       UpdateStatus.available => ListTile(
         key: const Key('versionRow'),
         contentPadding: EdgeInsets.zero,
-        title: Text(context.l10n.updateTo(version)),
+        title: _line(context.l10n.updateTo(version)),
         trailing: _fit(
           FilledButton(
             key: const Key('updateDownload'),
@@ -47,7 +47,7 @@ class VersionRow extends ConsumerWidget {
       UpdateStatus.failed => ListTile(
         key: const Key('versionRow'),
         contentPadding: EdgeInsets.zero,
-        title: Text(context.l10n.updateTo(version)),
+        title: _line(context.l10n.updateTo(version)),
         trailing: _fit(
           TextButton(
             key: const Key('updateRetry'),
@@ -59,7 +59,7 @@ class VersionRow extends ConsumerWidget {
       UpdateStatus.ready => ListTile(
         key: const Key('versionRow'),
         contentPadding: EdgeInsets.zero,
-        title: Text(context.l10n.updateTo(version)),
+        title: _line(context.l10n.updateTo(version)),
         trailing: _fit(
           FilledButton(
             key: const Key('updateInstall'),
@@ -80,4 +80,11 @@ Widget _fit(Widget button) => ConstrainedBox(
     alignment: Alignment.centerRight,
     child: button,
   ),
+);
+
+/// One line that shrinks to the room left beside the button.
+Widget _line(String text) => FittedBox(
+  fit: BoxFit.scaleDown,
+  alignment: Alignment.centerLeft,
+  child: Text(text),
 );

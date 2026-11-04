@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/utils/result.dart';
 import 'in_memory_list_service.dart';
@@ -89,6 +88,3 @@ class LocalListStore with WidgetsBindingObserver {
     _timer?.cancel();
   }
 }
-
-/// Null in tests; `main` sets it.
-final localListStoreProvider = Provider<LocalListStore?>((ref) => null);

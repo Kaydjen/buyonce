@@ -2,7 +2,7 @@ import '../../core/utils/result.dart';
 import '../../domain/models/group.dart';
 
 /// Storage of groups and their members. The in-memory service serves the fake users
-/// and tests; the Firestore service (step 59.2) serves the real signed-in user.
+/// and tests; the Firestore service serves the real signed-in user.
 ///
 /// Authorisation (who may rename, remove, delete) is decided by the repository and, on
 /// the server, again by the security rules; the service only does what it is told.

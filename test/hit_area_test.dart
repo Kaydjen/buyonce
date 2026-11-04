@@ -48,7 +48,7 @@ void main() {
     expect(find.byType(TextField).evaluate().length, fields);
   });
 
-  testWidgets('card text action reacts 4 dp above its plate', (tester) async {
+  testWidgets('the Mark all plate reacts 4 dp above it', (tester) async {
     await _pump(tester, StyleVariant.d7);
     final plate = _plate(tester, 'markAll');
     // The touch area is 48 dp high, symmetric around the plate.
@@ -60,7 +60,7 @@ void main() {
     expect(find.byKey(const Key('markAll')), findsNothing);
   });
 
-  testWidgets('card text action ignores a tap 8 dp above', (tester) async {
+  testWidgets('the Mark all plate ignores a tap 8 dp above', (tester) async {
     await _pump(tester, StyleVariant.d7);
     final plate = _plate(tester, 'markAll');
 

@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../app_tokens.dart';
 
-/// Design 7: design 6 with the owner's remarks and the shadow spec of the seventh image
-/// (page #EDF1F4, white and #0D2750-at-18% shadows). Needed products carry a glowing
-/// dot, the buttons in card titles are small raised plates. Accent: apricot. The dark
+/// Design 7, the app's look: soft raised shapes (white and #0D2750-at-18% shadows).
+/// Needed products carry a glowing dot, the buttons in card titles are small raised plates. Accent: apricot. The dark
 /// variant is neutral grey, like a dark soft tile, with a thin rim on the cards.
 abstract final class Design7 {
   static const dark = AppTokens(
@@ -41,7 +40,6 @@ abstract final class Design7 {
     floatLift: 72,
     tabHeight: 48,
     bigHeader: true,
-    statusInline: true,
     headingSize: 20,
     displayOnControls: true,
     headerTone: false,
@@ -50,7 +48,6 @@ abstract final class Design7 {
     bodyWeight: FontWeight.w400,
     titleSpacing: 0,
     bodySpacing: 0,
-    labelSpacing: 1.4,
     captionSpacing: 1.2,
     capsTitles: true,
   );
@@ -65,7 +62,6 @@ abstract final class Design7 {
     muted: Color(0xFF565F70),
     accent: Color(0xFFF7993E),
     needMark: Color(0xFFF1B684),
-    accentInk: Color(0xFFA5500A),
     radiusChip: 999,
     radiusField: 999,
     radiusCard: 28,
@@ -88,7 +84,6 @@ abstract final class Design7 {
     floatLift: 72,
     tabHeight: 48,
     bigHeader: true,
-    statusInline: true,
     headingSize: 20,
     displayOnControls: true,
     headerTone: false,
@@ -97,7 +92,6 @@ abstract final class Design7 {
     bodyWeight: FontWeight.w400,
     titleSpacing: 0,
     bodySpacing: 0,
-    labelSpacing: 1.4,
     captionSpacing: 1.2,
     capsTitles: true,
   );

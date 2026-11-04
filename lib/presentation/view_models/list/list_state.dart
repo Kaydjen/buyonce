@@ -256,7 +256,6 @@ class ListState {
 
   /// Unsent marks of mine: the Notify button shows while there are any.
   bool get hasUnsent => myMarkIds.isNotEmpty;
-  int get plannedCount => products.where((p) => p.planned).length;
 
   /// New live data of the group; [usage] follows the products.
   ListState withData({

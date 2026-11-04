@@ -407,7 +407,7 @@ class ListRepository {
   /// leave the list. A trip with a mark from today stays whole. History is kept.
   /// With [onlyUser] only that user's trip is sent: on the server nobody writes the trip
   /// of another member, the partner's stale trip is sent by their own phone (and by the
-  /// server's clock, step 61).
+  /// server's clock).
   Future<Result<void>> sendStaleTrips({DateTime? now, String? onlyUser}) =>
       _groups.getGroup(groupId).andThen<void>((group) async {
         final trips = await _service.getOpenTrips(groupId);

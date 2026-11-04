@@ -46,7 +46,6 @@ class AppTokens extends ThemeExtension<AppTokens> {
     this.rim,
     this.sheen,
     this.accentInk,
-    this.statusInline = false,
     this.headingSize = 22,
     this.tabHeight = 36,
     this.captionSpacing,
@@ -55,7 +54,6 @@ class AppTokens extends ThemeExtension<AppTokens> {
     this.bodyWeight = FontWeight.w400,
     this.titleSpacing = 0,
     this.bodySpacing = 0,
-    this.labelSpacing = 0.6,
     this.capsTitles = false,
   });
 
@@ -72,7 +70,7 @@ class AppTokens extends ThemeExtension<AppTokens> {
   /// The single accent: the Send button (checks carry no accent).
   final Color accent;
 
-  /// The mark of a needed product in Plan; stage 2 decides between text and accent.
+  /// The mark of a needed product in Plan.
   final Color needMark;
 
   final double radiusChip;
@@ -155,9 +153,6 @@ class AppTokens extends ThemeExtension<AppTokens> {
   final Color? accentInk;
   Color get ink => accentInk ?? accent;
 
-  /// The status of Plan sits right of the heading instead of under it.
-  final bool statusInline;
-
   /// Font size of the heading in the top bar and of app bar titles.
   final double headingSize;
 
@@ -202,9 +197,6 @@ class AppTokens extends ThemeExtension<AppTokens> {
   final FontWeight bodyWeight;
   final double titleSpacing;
   final double bodySpacing;
-
-  /// Letter spacing of the small upper-case section labels.
-  final double labelSpacing;
 
   /// Card titles are upper case.
   final bool capsTitles;
@@ -257,7 +249,6 @@ class AppTokens extends ThemeExtension<AppTokens> {
     Color? rim,
     Color? sheen,
     Color? accentInk,
-    bool? statusInline,
     double? headingSize,
     double? tabHeight,
     double? captionSpacing,
@@ -266,7 +257,6 @@ class AppTokens extends ThemeExtension<AppTokens> {
     FontWeight? bodyWeight,
     double? titleSpacing,
     double? bodySpacing,
-    double? labelSpacing,
     bool? capsTitles,
   }) => AppTokens(
     brightness: brightness ?? this.brightness,
@@ -307,7 +297,6 @@ class AppTokens extends ThemeExtension<AppTokens> {
     rim: rim ?? this.rim,
     sheen: sheen ?? this.sheen,
     accentInk: accentInk ?? this.accentInk,
-    statusInline: statusInline ?? this.statusInline,
     headingSize: headingSize ?? this.headingSize,
     tabHeight: tabHeight ?? this.tabHeight,
     captionSpacing: captionSpacing ?? this.captionSpacing,
@@ -316,7 +305,6 @@ class AppTokens extends ThemeExtension<AppTokens> {
     bodyWeight: bodyWeight ?? this.bodyWeight,
     titleSpacing: titleSpacing ?? this.titleSpacing,
     bodySpacing: bodySpacing ?? this.bodySpacing,
-    labelSpacing: labelSpacing ?? this.labelSpacing,
     capsTitles: capsTitles ?? this.capsTitles,
   );
 
@@ -366,7 +354,6 @@ class AppTokens extends ThemeExtension<AppTokens> {
       rim: Color.lerp(rim, other.rim, t),
       sheen: Color.lerp(sheen, other.sheen, t),
       accentInk: Color.lerp(accentInk, other.accentInk, t),
-      statusInline: t < 0.5 ? statusInline : other.statusInline,
       headingSize: lerpDouble(headingSize, other.headingSize, t)!,
       tabHeight: lerpDouble(tabHeight, other.tabHeight, t)!,
       captionSpacing: lerpDouble(captionSpacing, other.captionSpacing, t),
@@ -375,7 +362,6 @@ class AppTokens extends ThemeExtension<AppTokens> {
       bodyWeight: FontWeight.lerp(bodyWeight, other.bodyWeight, t)!,
       titleSpacing: lerpDouble(titleSpacing, other.titleSpacing, t)!,
       bodySpacing: lerpDouble(bodySpacing, other.bodySpacing, t)!,
-      labelSpacing: lerpDouble(labelSpacing, other.labelSpacing, t)!,
       capsTitles: t < 0.5 ? capsTitles : other.capsTitles,
     );
   }

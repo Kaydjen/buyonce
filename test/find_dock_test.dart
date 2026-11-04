@@ -28,6 +28,43 @@ Finder get _list => find.byType(Scrollable).first;
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
+  testWidgets('the icon leaving the card looks like the card button', (
+    tester,
+  ) async {
+    await _pump(tester, StyleVariant.d7);
+    BoxDecoration plate(Finder of) => tester
+        .widgetList<DecoratedBox>(
+          find.descendant(of: of, matching: find.byType(DecoratedBox)),
+        )
+        .map((d) => d.decoration)
+        .whereType<BoxDecoration>()
+        .firstWhere((d) => d.shape == BoxShape.circle);
+    final card =
+        tester
+                .widget<Ink>(
+                  find.descendant(
+                    of: find.byKey(const Key('findButton')),
+                    matching: find.byType(Ink),
+                  ),
+                )
+                .decoration!
+            as BoxDecoration;
+    expect(card.gradient, isNotNull);
+
+    // Just past the edge the icon is at the start of its flight.
+    await tester.drag(_list, const Offset(0, -300));
+    await tester.pump();
+    for (var i = 0; i < 20; i++) {
+      if (find.byKey(const Key('findDock')).evaluate().isNotEmpty) break;
+      await tester.drag(_list, const Offset(0, -20));
+      await tester.pump();
+    }
+    final dock = plate(find.byKey(const Key('findDock')));
+    expect(dock.gradient, card.gradient);
+    expect(dock.color, isNull);
+    await tester.pumpAndSettle();
+  });
+
   for (final variant in [StyleVariant.d1, StyleVariant.d7]) {
     group(variant.name, () {
       testWidgets('a tab switch puts the icon in place without a flight', (

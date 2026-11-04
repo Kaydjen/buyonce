@@ -7,9 +7,9 @@ import 'fade_slot.dart';
 import 'header_bar.dart';
 import 'raised_icon.dart';
 
-/// The top bar of Plan and Shop. Three looks, chosen by the style: text buttons
-/// (classic), plates (design 4), and a large tappable heading with the status under it
-/// and plain icons (design 5). [menu] is the popup menu button, built by the screen.
+/// The top bar of Plan and Shop. Two looks, chosen by the style: text buttons (flat
+/// baseline), and a large tappable heading with the status beside it and raised plates.
+/// [menu] is the popup menu button, built by the screen.
 class TopBar extends StatelessWidget {
   const TopBar({
     super.key,
@@ -111,28 +111,21 @@ class TopBar extends StatelessWidget {
   Widget _heading(BuildContext context, bool status) {
     final t = context.tokens;
     final theme = Theme.of(context).textTheme;
-    final headingStyle = t.statusInline
-        ? theme.titleLarge!
-        : theme.headlineSmall!;
     final statusText = Text.rich(
       key: const Key('toBuyCount'),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       TextSpan(
         children: [
-          if (!t.accentAsText) ...[
-            const WidgetSpan(
-              alignment: PlaceholderAlignment.middle,
-              child: AccentDot(size: 7),
-            ),
-            const TextSpan(text: '  '),
-          ],
+          const WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: AccentDot(size: 7),
+          ),
+          const TextSpan(text: '  '),
           TextSpan(
             text: '$toBuyCount',
             style: t.weighted(
-              theme.bodyMedium!.copyWith(
-                color: t.accentAsText ? t.ink : t.text,
-              ),
+              theme.bodyMedium!.copyWith(color: t.text),
               t.titleWeight,
             ),
           ),
@@ -151,7 +144,7 @@ class TopBar extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: t.weighted(
-              t.controlStyle(headingStyle.copyWith(color: t.text)),
+              t.controlStyle(theme.titleLarge!.copyWith(color: t.text)),
               t.titleWeight,
             ),
           ),
@@ -173,34 +166,19 @@ class TopBar extends StatelessWidget {
               borderRadius: BorderRadius.circular(t.radiusRow),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
-                child: t.statusInline
-                    ? title
-                    : Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          title,
-                          if (status)
-                            statusBox
-                          else
-                            // Keeps the heading where it is when the status comes
-                            // and goes.
-                            Text(' ', style: theme.bodyMedium),
-                        ],
-                      ),
+                child: title,
               ),
             ),
           ),
-          if (t.statusInline)
-            Flexible(
-              child: FadeSlot(
-                show: status,
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 12),
-                  child: statusBox,
-                ),
+          Flexible(
+            child: FadeSlot(
+              show: status,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 12),
+                child: statusBox,
               ),
             ),
+          ),
         ],
       ),
     );
