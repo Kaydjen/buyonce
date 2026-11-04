@@ -92,6 +92,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('sendButton')), findsOneWidget);
       expectNoOverflow(tester, 'Shop');
+      // The partner strip is a full card now: the user scrolls the search into view.
+      await tester.ensureVisible(find.byKey(const Key('findButton')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('findButton')));
       await tester.pumpAndSettle();
       expectNoOverflow(tester, 'Shop search');

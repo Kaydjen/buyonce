@@ -538,12 +538,21 @@ class _ListScreenState extends ConsumerState<ListScreen>
     await ref.read(listViewModelProvider.notifier).selectUser(id);
   }
 
-  List<String> _noticeLines(ListState s) => noticeLines(
-    s.notices,
-    s.products,
-    (userId) => ref.watch(userNameProvider(userId)),
-    l10n: context.l10n,
-  );
+  /// Names are shown only once they are known (or failed to load), so a cold start from
+  /// a push never flashes "Member" instead of the sender.
+  bool get _namesReady {
+    final names = ref.watch(userNamesProvider);
+    return names.hasValue || names.hasError;
+  }
+
+  List<String> _noticeLines(ListState s) => !_namesReady
+      ? const []
+      : noticeLines(
+          s.notices,
+          s.products,
+          (userId) => ref.watch(userNameProvider(userId)),
+          l10n: context.l10n,
+        );
 
   bool get _signedIn => ref.read(accountViewModelProvider).value != null;
 
@@ -765,7 +774,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
           alignment: Alignment.topCenter,
           child: Column(
             children: [
-              if (shop && s.othersTaken.isNotEmpty) _presence(s),
+              if (shop && s.othersTaken.isNotEmpty && _namesReady) _presence(s),
               if (_noticeLines(s).isNotEmpty)
                 NoticeBanner(
                   lines: _noticeLines(s),
@@ -993,24 +1002,20 @@ class _ListScreenState extends ConsumerState<ListScreen>
       for (final e in s.othersTaken.entries)
         context.l10n.shoppingTaken(ref.watch(userNameProvider(e.key)), e.value),
     ].join(' · ');
+    // The same raised card as the notice banner, so both read as messages.
     return Padding(
       key: const Key('presence'),
       padding: EdgeInsets.fromLTRB(
         context.tokens.gutter,
-        0,
+        4,
         context.tokens.gutter,
-        8,
+        12,
       ),
       child: Panel(
-        tinted: true,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: SizedBox(
           width: double.infinity,
-          child: Text(
-            text,
-            style: Theme.of(context).textTheme.bodyMedium!
-                .copyWith(color: context.tokens.muted),
-          ),
+          child: Text(text, style: Theme.of(context).textTheme.bodyMedium),
         ),
       ),
     );

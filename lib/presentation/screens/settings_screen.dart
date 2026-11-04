@@ -9,6 +9,7 @@ import '../../l10n/l10n.dart';
 import '../view_models/settings/settings_view_model.dart';
 import '../view_models/settings/style_variant_view_model.dart';
 import '../widgets/account_section.dart';
+import '../widgets/card_action.dart';
 import '../widgets/card_sheet.dart';
 import '../widgets/edge_fade.dart';
 import '../widgets/segment_choice.dart';
@@ -17,37 +18,34 @@ import '../widgets/titled_card.dart';
 import '../widgets/version_row.dart';
 
 /// "30 s", "5 min".
-String periodLabel(BuildContext context, int seconds) =>
-    seconds < 60
+String periodLabel(BuildContext context, int seconds) => seconds < 60
     ? context.l10n.secondsShort(seconds)
     : context.l10n.minutesShort(seconds ~/ 60);
 
-/// The value of a row that opens a picker: a flat tint pill, dimmed while the row is off.
+/// The value of a row that opens a picker: a raised pill, dimmed while the row is off.
 class _ValuePill extends StatelessWidget {
-  const _ValuePill({required this.label, required this.enabled});
+  const _ValuePill({
+    required this.label,
+    required this.enabled,
+    required this.onPressed,
+  });
 
   final String label;
   final bool enabled;
+  final VoidCallback onPressed;
 
+  /// The same low raised plate as "Mark all" in the list cards.
   @override
   Widget build(BuildContext context) {
-    final t = context.tokens;
     return Opacity(
       opacity: enabled ? 1 : 0.5,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: t.tint,
-          borderRadius: BorderRadius.circular(t.radiusButton),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-          child: Text(
-            label,
-            style: t.weighted(
-              Theme.of(context).textTheme.labelLarge!.copyWith(color: t.muted),
-              t.titleWeight,
-            ),
-          ),
+      child: IgnorePointer(
+        ignoring: !enabled,
+        // The plate keeps a gap to its touch area; shift it so its right edge lines up
+        // with the switch above.
+        child: Transform.translate(
+          offset: const Offset(12, 0),
+          child: CardTextAction(label: label, onPressed: onPressed),
         ),
       ),
     );
@@ -99,6 +97,8 @@ class SettingsScreen extends ConsumerWidget {
                       trailing: _ValuePill(
                         label: periodLabel(context, settings.autoSendSeconds),
                         enabled: settings.autoSendEnabled,
+                        onPressed: () =>
+                            _pickPeriod(context, vm, settings.autoSendSeconds),
                       ),
                       onTap: () =>
                           _pickPeriod(context, vm, settings.autoSendSeconds),
