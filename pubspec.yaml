@@ -32,6 +32,9 @@ flutter:
   uses-material-design: true
   generate: true
 
+  assets:
+    - assets/fonts/OFL-Montserrat.txt
+
   fonts:
     - family: Montserrat
       fonts:

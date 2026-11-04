@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/app_info.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/theme/style_variant.dart';
 import '../../domain/models/app_settings.dart';
@@ -188,7 +189,21 @@ class SettingsScreen extends ConsumerWidget {
               TitledCard(
                 title: context.l10n.about,
                 padding: _inner,
-                child: const VersionRow(),
+                child: Column(
+                  children: [
+                    const VersionRow(),
+                    ListTile(
+                      key: const Key('licensesRow'),
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(context.l10n.licenses),
+                      onTap: () => showLicensePage(
+                        context: context,
+                        applicationName: 'BuyOnce',
+                        applicationVersion: appVersion,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

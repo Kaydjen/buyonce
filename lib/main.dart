@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import 'core/font_license.dart';
 import 'core/theme/app_theme.dart';
 import 'data/services/firebase_account_service.dart';
 import 'data/services/firebase_group_service.dart';
@@ -33,6 +34,7 @@ const _workerUrl = 'https://buyonce-worker.olive-lantern-4x9.workers.dev';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  registerFontLicense();
   await Firebase.initializeApp();
   await GoogleSignIn.instance.initialize(serverClientId: _serverClientId);
   // The page runs under the system bars; the screens keep their own safe areas.

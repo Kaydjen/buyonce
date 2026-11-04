@@ -309,6 +309,7 @@
   "sortAlphabetical": "Alphabetical",
   "sortFrequent": "Most frequent",
   "sortRecent": "Recently bought",
+  "licenses": "Licenses",
   "version": "Version",
   "updateTo": "Update to {version}",
   "@updateTo": {

@@ -433,6 +433,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sortRecent => 'Recently bought';
 
   @override
+  String get licenses => 'Licenses';
+
+  @override
   String get version => 'Version';
 
   @override

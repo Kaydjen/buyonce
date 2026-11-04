@@ -830,6 +830,12 @@ abstract class AppLocalizations {
   /// **'Recently bought'**
   String get sortRecent;
 
+  /// No description provided for @licenses.
+  ///
+  /// In en, this message translates to:
+  /// **'Licenses'**
+  String get licenses;
+
   /// No description provided for @version.
   ///
   /// In en, this message translates to:

@@ -435,6 +435,9 @@ class AppLocalizationsUk extends AppLocalizations {
   String get sortRecent => 'Нещодавно куплені';
 
   @override
+  String get licenses => 'Ліцензії';
+
+  @override
   String get version => 'Версія';
 
   @override
