@@ -461,7 +461,7 @@ abstract class AppLocalizations {
   /// No description provided for @shoppingTaken.
   ///
   /// In en, this message translates to:
-  /// **'{name} shopping, {n} taken'**
+  /// **'{name} is at the store, {n, plural, one{{n} item} other{{n} items}} marked'**
   String shoppingTaken(String name, int n);
 
   /// No description provided for @menu.

@@ -5,6 +5,7 @@ import 'package:buyonce/data/repositories/settings_repository.dart';
 import 'package:buyonce/data/services/settings_service.dart';
 import 'package:buyonce/domain/models/app_settings.dart';
 import 'package:buyonce/domain/models/purchase.dart';
+import 'package:buyonce/l10n/app_localizations_uk.dart';
 import 'package:buyonce/main.dart';
 import 'package:buyonce/presentation/view_models/history/history_days.dart';
 import 'package:buyonce/core/utils/result.dart';
@@ -28,6 +29,15 @@ void main() {
       final uk = arb('uk').keys.where((k) => !k.startsWith('@')).toSet();
       expect(en.difference(uk), isEmpty, reason: 'missing in app_uk.arb');
       expect(uk.difference(en), isEmpty, reason: 'only in app_uk.arb');
+    });
+
+    test('the strip "who is shopping" uses the right Ukrainian plural', () {
+      final uk = AppLocalizationsUk();
+      expect(uk.shoppingTaken('Анна', 1), endsWith('1 товар'));
+      expect(uk.shoppingTaken('Анна', 2), endsWith('2 товари'));
+      expect(uk.shoppingTaken('Анна', 5), endsWith('5 товарів'));
+      expect(uk.shoppingTaken('Анна', 21), endsWith('21 товар'));
+      expect(uk.shoppingTaken('Анна', 0), endsWith('0 товарів'));
     });
 
     test('both languages use the same placeholders in every message', () {
@@ -99,7 +109,7 @@ void main() {
     addTearDown(tester.platformDispatcher.clearLocalesTestValue);
     await tester.pumpWidget(const ProviderScope(child: BuyOnceApp()));
     await tester.pumpAndSettle();
-    expect(find.text('Купити'), findsWidgets);
+    expect(find.text('Треба купити'), findsWidgets);
 
     tester.platformDispatcher.localesTestValue = const [Locale('de', 'DE')];
     await tester.pumpAndSettle();

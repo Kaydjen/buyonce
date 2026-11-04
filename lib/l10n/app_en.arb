@@ -161,7 +161,7 @@
   },
   "find": "Find",
   "closeSearch": "Close search",
-  "shoppingTaken": "{name} shopping, {n} taken",
+  "shoppingTaken": "{name} is at the store, {n, plural, one{{n} item} other{{n} items}} marked",
   "@shoppingTaken": {
     "placeholders": {
       "name": {

@@ -98,7 +98,7 @@ void main() {
       await tester.tap(find.byKey(const Key('findButton')));
       await tester.pumpAndSettle();
       expectNoOverflow(tester, 'Shop search');
-      await tester.tap(find.byIcon(Icons.close));
+      await tester.tap(find.byTooltip('Close search'));
       await tester.pumpAndSettle();
 
       // Menu and the sheets behind it (Sort and Templates are Plan items).

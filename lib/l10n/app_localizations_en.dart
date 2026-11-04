@@ -219,7 +219,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String shoppingTaken(String name, int n) {
-    return '$name shopping, $n taken';
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n items',
+      one: '$n item',
+    );
+    return '$name is at the store, $_temp0 marked';
   }
 
   @override

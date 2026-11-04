@@ -25,7 +25,7 @@ class AppLocalizationsUk extends AppLocalizations {
   String get delete => 'Видалити';
 
   @override
-  String get undo => 'Повернути';
+  String get undo => 'Відмінити';
 
   @override
   String get add => 'Додати';
@@ -169,33 +169,33 @@ class AppLocalizationsUk extends AppLocalizations {
 
   @override
   String sentCount(int n) {
-    return 'Надіслано $n';
+    return 'Повідомлено: $n';
   }
 
   @override
   String doneCount(int n) {
-    return 'Готово $n';
+    return 'Куплено: $n';
   }
 
   @override
   String notifiedCount(int n) {
-    return 'Повідомлено $n';
+    return 'Попросили: $n';
   }
 
   @override
   String get couldntSave => 'Не вдалося зберегти, спробуйте ще раз';
 
   @override
-  String get send => 'Надіслати';
+  String get send => 'Повідомити про покупки';
 
   @override
-  String get done => 'Готово';
+  String get done => 'Покупки зроблено';
 
   @override
-  String get notify => 'Повідомити';
+  String get notify => 'Попросити купити';
 
   @override
-  String get toBuy => 'Купити';
+  String get toBuy => 'Треба купити';
 
   @override
   String get toBuyWord => 'до купівлі';
@@ -204,7 +204,7 @@ class AppLocalizationsUk extends AppLocalizations {
   String get frequent => 'Часті';
 
   @override
-  String get select => 'Вибір';
+  String get select => 'Що купити';
 
   @override
   String addQuery(String query) {
@@ -219,7 +219,15 @@ class AppLocalizationsUk extends AppLocalizations {
 
   @override
   String shoppingTaken(String name, int n) {
-    return '$name у магазині, взято $n';
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n товару',
+      many: '$n товарів',
+      few: '$n товари',
+      one: '$n товар',
+    );
+    return '$name зараз у магазині. Відмічено: $_temp0';
   }
 
   @override
@@ -232,25 +240,25 @@ class AppLocalizationsUk extends AppLocalizations {
   String get sort => 'Сортувати';
 
   @override
-  String get templates => 'Шаблони';
+  String get templates => 'Збережені списки';
 
   @override
   String get settings => 'Налаштування';
 
   @override
-  String get newLabel => 'Нове';
+  String get newLabel => 'Нові товари';
 
   @override
   String newBy(String authors) {
-    return 'Нове · $authors';
+    return 'Нове від: $authors';
   }
 
   @override
-  String get markAll => 'Усі';
+  String get markAll => 'Відмітити всі';
 
   @override
   String alreadyBoughtBy(String name) {
-    return '$name уже купив(ла) це';
+    return 'Це вже куплено: $name';
   }
 
   @override
@@ -260,7 +268,7 @@ class AppLocalizationsUk extends AppLocalizations {
   String get signInWithGoogle => 'Увійти через Google';
 
   @override
-  String get continueWithoutAccount => 'Продовжити без облікового запису';
+  String get continueWithoutAccount => 'Продовжити без входу';
 
   @override
   String enterNameLength(int max) {
@@ -268,13 +276,13 @@ class AppLocalizationsUk extends AppLocalizations {
   }
 
   @override
-  String get sending => 'Надсилання';
+  String get sending => 'Повідомлення';
 
   @override
-  String get autoSend => 'Автонадсилання';
+  String get autoSend => 'Повідомляти автоматично';
 
   @override
-  String get sendAfter => 'Надіслати через';
+  String get sendAfter => 'Повідомити через';
 
   @override
   String get theme => 'Тема';
@@ -337,17 +345,17 @@ class AppLocalizationsUk extends AppLocalizations {
 
   @override
   String autoInSeconds(int n) {
-    return 'Авто · через $n с';
+    return 'Надішлеться через $n с';
   }
 
   @override
   String autoInMinutes(int n) {
-    return 'Авто · через $n хв';
+    return 'Надішлеться через $n хв';
   }
 
   @override
   String autoAt(String time) {
-    return 'Авто · $time';
+    return 'Надішлеться о $time';
   }
 
   @override
@@ -394,16 +402,16 @@ class AppLocalizationsUk extends AppLocalizations {
   }
 
   @override
-  String get recent => 'Нещодавні';
+  String get recent => 'Останні';
 
   @override
-  String get deleted => 'Видалено';
+  String get deleted => 'Видалені';
 
   @override
-  String get pin => 'Закріпити';
+  String get pin => 'Зробити шаблоном';
 
   @override
-  String get unpin => 'Відкріпити';
+  String get unpin => 'Прибрати з шаблонів';
 
   @override
   String get couldntSignIn => 'Не вдалося увійти';

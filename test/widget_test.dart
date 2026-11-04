@@ -5,6 +5,7 @@ import 'package:buyonce/main.dart';
 import 'package:buyonce/presentation/view_models/groups/groups_view_model.dart';
 import 'package:buyonce/presentation/view_models/list/list_view_model.dart';
 import 'package:buyonce/presentation/view_models/settings/style_variant_view_model.dart';
+import 'package:buyonce/presentation/widgets/accent_dot.dart';
 import 'package:buyonce/presentation/widgets/flash_on_add.dart';
 import 'package:buyonce/presentation/widgets/product_row.dart';
 import 'package:flutter/material.dart';
@@ -1115,7 +1116,7 @@ void main() {
     await goShop(tester);
     expect(find.byKey(const Key('presence')), findsNothing);
     await partnerMarks(tester, ['seed4', 'seed0']);
-    expect(find.text('Anna shopping, 2 taken'), findsOneWidget);
+    expect(find.text('Anna is at the store, 2 items marked'), findsOneWidget);
     expect(
       find.descendant(
         of: find.ancestor(
@@ -1126,6 +1127,22 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('a tap hides the presence strip until its text changes', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    await goShop(tester);
+    await partnerMarks(tester, ['seed4']);
+    expect(find.byKey(const Key('presence')), findsOneWidget);
+    expect(find.byType(AccentDot), findsWidgets);
+    await tester.tap(find.byKey(const Key('presence')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('presence')), findsNothing);
+    // Another product taken: the text is new, the strip comes back.
+    await partnerMarks(tester, ['seed0']);
+    expect(find.byKey(const Key('presence')), findsOneWidget);
   });
 
   testWidgets('my mark is a bare check, a partner mark is check and name', (

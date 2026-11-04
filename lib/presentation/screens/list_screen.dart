@@ -108,6 +108,9 @@ class _ListScreenState extends ConsumerState<ListScreen>
   /// The confirmation shown on the Send / Notify button for a moment after it.
   ({bool ask, String text})? _sent;
   Timer? _sentTimer;
+
+  /// The text of the presence strip the user has tapped away.
+  String? _presenceHidden;
   double _lastKeyboardInset = 0;
   DateTime? _pausedAt;
   static const _noticeReadTime = Duration(seconds: 10);
@@ -774,7 +777,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
           alignment: Alignment.topCenter,
           child: Column(
             children: [
-              if (shop && s.othersTaken.isNotEmpty && _namesReady) _presence(s),
+              if (_showPresence(s, shop)) _presence(s),
               if (_noticeLines(s).isNotEmpty)
                 NoticeBanner(
                   lines: _noticeLines(s),
@@ -996,13 +999,29 @@ class _ListScreenState extends ConsumerState<ListScreen>
   Widget _rounded({Key? key, required Widget child}) =>
       Panel(key: key, child: child);
 
-  /// Who else is shopping now and how much they have taken.
+  /// The text of the strip: who else is shopping now and how much they have taken.
+  String _presenceText(ListState s) => [
+    for (final e in s.othersTaken.entries)
+      context.l10n.shoppingTaken(ref.watch(userNameProvider(e.key)), e.value),
+  ].join(' · ');
+
+  /// Whether the strip is shown: a tap hides it until its text changes (somebody takes
+  /// another product) or until nobody is shopping any more.
+  bool _showPresence(ListState s, bool shop) {
+    if (!shop || s.othersTaken.isEmpty || !_namesReady) {
+      if (s.othersTaken.isEmpty && _presenceHidden != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) setState(() => _presenceHidden = null);
+        });
+      }
+      return false;
+    }
+    return _presenceText(s) != _presenceHidden;
+  }
+
   Widget _presence(ListState s) {
-    final text = [
-      for (final e in s.othersTaken.entries)
-        context.l10n.shoppingTaken(ref.watch(userNameProvider(e.key)), e.value),
-    ].join(' · ');
-    // The same raised card as the notice banner, so both read as messages.
+    final text = _presenceText(s);
+    // The same raised card as the notice banner, so both read as messages; a tap hides it.
     return Padding(
       key: const Key('presence'),
       padding: EdgeInsets.fromLTRB(
@@ -1012,10 +1031,30 @@ class _ListScreenState extends ConsumerState<ListScreen>
         12,
       ),
       child: Panel(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: SizedBox(
-          width: double.infinity,
-          child: Text(text, style: Theme.of(context).textTheme.bodyMedium),
+        child: InkWell(
+          onTap: () => setState(() => _presenceHidden = text),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+            // The accent dot of every notice, level with the middle of the first line.
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(top: 6),
+                  child: AccentDot(),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    text,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(Icons.close, size: 18, color: context.tokens.muted),
+              ],
+            ),
+          ),
         ),
       ),
     );
