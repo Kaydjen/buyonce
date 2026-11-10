@@ -6,7 +6,9 @@ import 'package:buyonce/data/services/gemini_api.dart';
 import 'package:buyonce/data/services/gemini_key_service.dart';
 import 'package:buyonce/data/services/photo_service.dart';
 import 'package:buyonce/data/services/scripted_gemini_api.dart';
+import 'package:buyonce/core/theme/style_variant.dart';
 import 'package:buyonce/main.dart';
+import 'package:buyonce/presentation/view_models/settings/style_variant_view_model.dart';
 import 'package:buyonce/presentation/widgets/card_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -28,6 +30,7 @@ Future<(ScriptedPhotoService, ScriptedGeminiApi)> openAdd(
   bool withKey = true,
   List<String>? models,
   bool narrow = false,
+  bool design7 = false,
 }) async {
   if (narrow) {
     tester.view.physicalSize = const Size(360, 740);
@@ -51,6 +54,12 @@ Future<(ScriptedPhotoService, ScriptedGeminiApi)> openAdd(
       child: const BuyOnceApp(),
     ),
   );
+  if (design7) {
+    // The product's own look: the accent is a dot (the flat test look has none).
+    ProviderScope.containerOf(tester.element(find.byType(MaterialApp)))
+        .read(styleVariantProvider.notifier)
+        .select(StyleVariant.d7);
+  }
   await tester.pumpAndSettle();
   await tester.tap(find.byKey(const Key('tabPlan')));
   await tester.pumpAndSettle();
@@ -213,10 +222,13 @@ void main() {
       var online = false;
       final (camera, api) = await openAdd(
         tester,
+        design7: true,
         script: (_) => online ? _names(['Rice']) : ScriptedGeminiApi.offline,
       );
       await tapCamera(tester);
       expect(find.text('No connection'), findsOneWidget);
+      // The accent dot sits in the button of this message.
+      expect(find.byKey(const Key('toastAccentDot')), findsOneWidget);
       online = true;
       await tester.tap(find.text('Retry'));
       await tester.pumpAndSettle();
@@ -228,11 +240,14 @@ void main() {
     testWidgets('nothing worked: a message with Retry', (tester) async {
       await openAdd(
         tester,
+        design7: true,
         script: (_) => ScriptedGeminiApi.error(503, 'high demand'),
       );
       await tapCamera(tester);
       expect(find.text("Couldn't name this item"), findsOneWidget);
       expect(find.text('Retry'), findsOneWidget);
+      // Only the "No connection" button carries the accent dot.
+      expect(find.byKey(const Key('toastAccentDot')), findsNothing);
     });
 
     testWidgets(

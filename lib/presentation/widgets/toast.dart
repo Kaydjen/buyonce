@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_tokens.dart';
+import 'accent_dot.dart';
 
 /// A short message at the bottom, one at a time: a soft raised pill in the page colour,
-/// not the standard dark bar. An action ("Undo") sits inside the pill.
+/// not the standard dark bar. An action ("Undo") sits inside the pill; [accentAction]
+/// puts the small accent dot before its label, for the one message the user must act on.
 void showToast(
   BuildContext context,
   String text, {
   Duration duration = const Duration(seconds: 4),
   String? actionLabel,
   VoidCallback? onAction,
+  bool accentAction = false,
 }) {
   final messenger = ScaffoldMessenger.of(context);
   messenger
@@ -32,6 +35,7 @@ void showToast(
         content: _Toast(
           text: text,
           actionLabel: actionLabel,
+          accentAction: accentAction,
           onAction: onAction == null
               ? null
               : () {
@@ -44,10 +48,16 @@ void showToast(
 }
 
 class _Toast extends StatelessWidget {
-  const _Toast({required this.text, this.actionLabel, this.onAction});
+  const _Toast({
+    required this.text,
+    this.actionLabel,
+    this.onAction,
+    this.accentAction = false,
+  });
 
   final String text;
   final String? actionLabel;
+  final bool accentAction;
   final VoidCallback? onAction;
 
   @override
@@ -79,12 +89,22 @@ class _Toast extends StatelessWidget {
             if (actionLabel != null)
               TextButton(
                 onPressed: onAction,
-                child: Text(
-                  actionLabel!,
-                  style: t.weighted(
-                    theme.textTheme.labelLarge!.copyWith(color: t.text),
-                    t.titleWeight,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Same rule as the accent buttons: a dot, never accent-coloured text.
+                    if (accentAction && !t.accentAsText) ...[
+                      const AccentDot(key: Key('toastAccentDot'), size: 8),
+                      const SizedBox(width: 8),
+                    ],
+                    Text(
+                      actionLabel!,
+                      style: t.weighted(
+                        theme.textTheme.labelLarge!.copyWith(color: t.text),
+                        t.titleWeight,
+                      ),
+                    ),
+                  ],
                 ),
               ),
           ],

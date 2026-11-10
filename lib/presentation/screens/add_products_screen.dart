@@ -103,6 +103,7 @@ class _AddProductsScreenState extends ConsumerState<AddProductsScreen> {
           context,
           l10n.noConnection,
           actionLabel: l10n.retry,
+          accentAction: true,
           onAction: () => _names.retry(_language),
         );
       case GeminiBadKey():
