@@ -125,6 +125,9 @@
   "licenses": "Ліцензії",
   "version": "Версія",
   "updateTo": "Оновити до {version}",
+  "gemini": "Gemini",
+  "apiKey": "Ключ API",
+  "invalidApiKey": "Це не схоже на ключ API",
   "download": "Завантажити",
   "install": "Встановити"
 }

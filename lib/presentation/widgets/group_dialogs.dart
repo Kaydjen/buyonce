@@ -21,6 +21,7 @@ class PromptDialog extends StatefulWidget {
     required this.onSubmit,
     this.initial = '',
     this.capitals = false,
+    this.plain = false,
     this.maxLength,
   });
 
@@ -29,6 +30,9 @@ class PromptDialog extends StatefulWidget {
   final String confirm;
   final String initial;
   final bool capitals;
+
+  /// A code or a key: no capital letter, no suggestions.
+  final bool plain;
   final int? maxLength;
   final Future<String?> Function(String text) onSubmit;
 
@@ -78,7 +82,11 @@ class _PromptDialogState extends State<PromptDialog> {
               maxLength: widget.maxLength,
               textCapitalization: widget.capitals
                   ? TextCapitalization.characters
+                  : widget.plain
+                  ? TextCapitalization.none
                   : TextCapitalization.sentences,
+              autocorrect: !widget.plain,
+              enableSuggestions: !widget.plain,
               decoration: InputDecoration(
                 hintText: widget.hint,
                 counterText: '',

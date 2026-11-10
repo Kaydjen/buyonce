@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/utils/result.dart';
 import '../../data/repositories/account_repository.dart';
+import '../../data/repositories/gemini_key_repository.dart';
 import '../../data/repositories/group_repository.dart';
 import '../../data/repositories/user_repository.dart';
 import '../models/group.dart';
@@ -12,10 +13,16 @@ import '../models/group.dart';
 /// the profile and the account. Without Cloud Functions the client
 /// does all of it, so a crash halfway can leave orphaned data (notes/decisions.md).
 class DeleteAccountUseCase {
-  DeleteAccountUseCase(this._accounts, this._groups, this._users);
+  DeleteAccountUseCase(
+    this._accounts,
+    this._groups,
+    this._users,
+    this._geminiKey,
+  );
   final AccountRepository _accounts;
   final GroupRepository _groups;
   final UserRepository _users;
+  final GeminiKeyRepository _geminiKey;
 
   /// [slot] names the user for the account calls, [userId] is the backend id that owns
   /// the groups, the list and the profile.
@@ -34,7 +41,10 @@ class DeleteAccountUseCase {
     if (personal case Failure(:final error)) return Failure(error);
     final profile = await _users.deleteProfile(userId);
     if (profile case Failure(:final error)) return Failure(error);
-    return _accounts.deleteAccount(slot);
+    final deleted = await _accounts.deleteAccount(slot);
+    // The key belongs to the person who is gone; a failed wipe must not undo the deletion.
+    if (deleted is Ok<void>) await _geminiKey.clear();
+    return deleted;
   }
 }
 
@@ -43,5 +53,6 @@ final deleteAccountUseCaseProvider = Provider(
     ref.watch(accountRepositoryProvider),
     ref.watch(groupRepositoryProvider),
     ref.watch(userRepositoryProvider),
+    ref.watch(geminiKeyRepositoryProvider),
   ),
 );

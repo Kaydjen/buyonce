@@ -319,6 +319,9 @@
       }
     }
   },
+  "gemini": "Gemini",
+  "apiKey": "API key",
+  "invalidApiKey": "That is not an API key",
   "download": "Download",
   "install": "Install"
 }

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:buyonce/core/theme/style_variant.dart';
 import 'package:buyonce/presentation/view_models/settings/style_variant_view_model.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,6 +14,9 @@ Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   // Date names of every language (the app loads them with its localizations).
   await initializeDateFormatting();
   // Empty stored settings for every test; without a mock the read never finishes.
-  setUp(() => SharedPreferences.setMockInitialValues({}));
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    FlutterSecureStorage.setMockInitialValues({});
+  });
   await testMain();
 }

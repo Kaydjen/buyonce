@@ -446,6 +446,15 @@ class AppLocalizationsUk extends AppLocalizations {
   }
 
   @override
+  String get gemini => 'Gemini';
+
+  @override
+  String get apiKey => 'Ключ API';
+
+  @override
+  String get invalidApiKey => 'Це не схоже на ключ API';
+
+  @override
   String get download => 'Завантажити';
 
   @override

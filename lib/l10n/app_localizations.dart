@@ -848,6 +848,24 @@ abstract class AppLocalizations {
   /// **'Update to {version}'**
   String updateTo(String version);
 
+  /// No description provided for @gemini.
+  ///
+  /// In en, this message translates to:
+  /// **'Gemini'**
+  String get gemini;
+
+  /// No description provided for @apiKey.
+  ///
+  /// In en, this message translates to:
+  /// **'API key'**
+  String get apiKey;
+
+  /// No description provided for @invalidApiKey.
+  ///
+  /// In en, this message translates to:
+  /// **'That is not an API key'**
+  String get invalidApiKey;
+
   /// No description provided for @download.
   ///
   /// In en, this message translates to:

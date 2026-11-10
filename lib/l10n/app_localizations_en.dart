@@ -444,6 +444,15 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get gemini => 'Gemini';
+
+  @override
+  String get apiKey => 'API key';
+
+  @override
+  String get invalidApiKey => 'That is not an API key';
+
+  @override
   String get download => 'Download';
 
   @override

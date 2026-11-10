@@ -1,4 +1,5 @@
 import 'package:buyonce/core/utils/result.dart';
+import 'package:buyonce/data/repositories/gemini_key_repository.dart';
 import 'package:buyonce/data/repositories/group_repository.dart';
 import 'package:buyonce/data/services/in_memory_account_service.dart';
 import 'package:buyonce/data/services/in_memory_group_service.dart';
@@ -186,6 +187,19 @@ void main() {
     );
     final home = await container.read(groupRepositoryProvider).getGroup('home');
     expect((home as Ok<Group>).value.memberIds, ['me']);
+  });
+
+  testWidgets('deleting the account also removes the Gemini key', (
+    tester,
+  ) async {
+    final container = await pumpApp(tester);
+    final keys = container.read(geminiKeyRepositoryProvider);
+    await keys.save('AIza-test-key-1234');
+    await openSettings(tester);
+    await tapKey(tester, 'deleteAccount');
+    await tapDialog(tester, 'Delete account');
+    expect(container.read(accountViewModelProvider).value, isNull);
+    expect(await keys.load(), isNull);
   });
 
   testWidgets('a failed re-authentication deletes nothing', (tester) async {
