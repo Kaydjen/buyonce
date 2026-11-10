@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:buyonce/core/utils/result.dart';
@@ -21,9 +22,9 @@ final _request = GeminiRequest(
 
 /// A client over a script; [script] answers by model.
 class Rig {
-  Rig(this.script) {
+  Rig(this.script, {Duration hedgeAfter = const Duration(seconds: 4)}) {
     api = ScriptedGeminiApi((call) => script(call));
-    client = GeminiClient(api, keys, clock: () => now);
+    client = GeminiClient(api, keys, clock: () => now, hedgeAfter: hedgeAfter);
   }
 
   final Result<GeminiReply> Function(GeminiCall call) script;
@@ -39,8 +40,11 @@ class Rig {
   void wait(Duration d) => now = now.add(d);
 }
 
-Future<Rig> rig(Result<GeminiReply> Function(GeminiCall call) script) async {
-  final r = Rig(script);
+Future<Rig> rig(
+  Result<GeminiReply> Function(GeminiCall call) script, {
+  Duration hedgeAfter = const Duration(seconds: 4),
+}) async {
+  final r = Rig(script, hedgeAfter: hedgeAfter);
   await r.keys.write('key-1');
   return r;
 }
@@ -386,6 +390,120 @@ void main() {
       r.client.reset();
       await r.ask([_a, _b]);
       expect(r.asked, [_a, _b, _a, _b]);
+    });
+  });
+
+  group('a slow model does not hold the others back', () {
+    const hedge = Duration(milliseconds: 40);
+    Future<void> pause(int ms) => Future<void>.delayed(Duration(milliseconds: ms));
+
+    test('a fast first model is the only one asked', () async {
+      final r = await rig(_ok, hedgeAfter: hedge);
+      expect(((await r.ask([_a, _b])) as GeminiOk).model, _a);
+      await pause(120); // longer than the hedge delay
+      expect(r.asked, [_a]);
+    });
+
+    test('a silent model: the next is asked too and answers first', () async {
+      final slow = Completer<void>();
+      final r = await rig(_ok, hedgeAfter: hedge);
+      r.api.gates[_a] = slow.future;
+      final watch = Stopwatch()..start();
+      final out = await r.ask([_a, _b]) as GeminiOk;
+      expect(out.model, _b);
+      expect(watch.elapsedMilliseconds, lessThan(1000));
+      expect(r.asked, [_a, _b]);
+      slow.complete(); // the late answer of the first one changes nothing
+      await pause(20);
+      expect(r.asked, [_a, _b]);
+    });
+
+    test('the first model answering before the delay ends the matter', () async {
+      final r = await rig(_ok, hedgeAfter: const Duration(seconds: 5));
+      final slow = Completer<void>();
+      r.api.gates[_a] = slow.future;
+      final future = r.ask([_a, _b]);
+      await pause(20);
+      slow.complete();
+      expect(((await future) as GeminiOk).model, _a);
+      expect(r.asked, [_a]);
+    });
+
+    test('two silent models: the third answers', () async {
+      final slowA = Completer<void>();
+      final slowB = Completer<void>();
+      final r = await rig(_ok, hedgeAfter: hedge);
+      r.api.gates[_a] = slowA.future;
+      r.api.gates[_b] = slowB.future;
+      final out = await r.ask([_a, _b, 'model-c']) as GeminiOk;
+      expect(out.model, 'model-c');
+      expect(r.asked, [_a, _b, 'model-c']);
+      slowA.complete();
+      slowB.complete();
+    });
+
+    test('a failing model hands over at once, without waiting for the delay', () async {
+      final r = await rig(
+        (c) => c.model == _a
+            ? ScriptedGeminiApi.error(503, 'high demand')
+            : _ok(c),
+        hedgeAfter: const Duration(seconds: 30),
+      );
+      final watch = Stopwatch()..start();
+      expect(((await r.ask([_a, _b])) as GeminiOk).model, _b);
+      expect(watch.elapsedMilliseconds, lessThan(1000));
+    });
+
+    test('the slow model answering after the others failed still wins', () async {
+      final slow = Completer<void>();
+      final r = await rig(
+        (c) => c.model == _a
+            ? ScriptedGeminiApi.text('{"names":["Late"]}')
+            : ScriptedGeminiApi.error(503, 'high demand'),
+        hedgeAfter: hedge,
+      );
+      r.api.gates[_a] = slow.future;
+      final future = r.ask([_a, _b]);
+      await pause(120); // B was asked and failed meanwhile
+      expect(r.asked, [_a, _b]);
+      slow.complete();
+      final out = await future as GeminiOk;
+      expect(out.model, _a);
+      expect(out.text, contains('Late'));
+    });
+
+    test('a limit that arrives late is remembered for the next question', () async {
+      final slow = Completer<void>();
+      final r = await rig(
+        (c) => c.model == _a
+            ? ScriptedGeminiApi.error(
+                429,
+                'quota',
+                quotaId: _dayQuota,
+              )
+            : _ok(c),
+        hedgeAfter: hedge,
+      );
+      r.api.gates[_a] = slow.future;
+      expect(((await r.ask([_a, _b])) as GeminiOk).model, _b);
+      slow.complete();
+      await pause(30);
+      r.api.gates.clear();
+      await r.ask([_a, _b]);
+      expect(r.asked, [_a, _b, _b]); // A is resting now, B is asked alone
+    });
+
+    test('everything silent or failing ends in one answer for the user', () async {
+      final slow = Completer<void>();
+      final r = await rig(
+        (_) => ScriptedGeminiApi.error(503, 'high demand'),
+        hedgeAfter: hedge,
+      );
+      r.api.gates[_a] = slow.future;
+      final future = r.ask([_a, _b]);
+      await pause(120);
+      slow.complete();
+      expect(await future, isA<GeminiFailed>());
     });
   });
 }

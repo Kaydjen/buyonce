@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -59,8 +60,13 @@ final class _Stop extends _Attempt {
   final GeminiOutcome outcome;
 }
 
-/// Asks the models of a list one after another until one answers, and remembers which
-/// ones are limited or broken so the next request does not wait for them again.
+/// Asks the models of a list in order until one answers, and remembers which ones are
+/// limited or broken so the next request does not wait for them again.
+///
+/// A model that fails or is limited hands over to the next one at once; a model that is
+/// only slow does too after [hedgeAfter]: the next model is asked as well and the first
+/// answer wins (the slow request is not cancelled, so its outcome still updates what is
+/// known about that model). A free-tier model now and then takes 20 s; this caps that.
 ///
 /// Limits cannot be read in advance (the API has no such call), so they are learned from
 /// the answers: a 429 skips that model until the limit lifts (a minute limit: the given
@@ -68,12 +74,19 @@ final class _Stop extends _Attempt {
 /// timeout) skips it for 20 s, a 404 or an image refusal marks it for good. The memory
 /// is dropped when the key or the list changes.
 class GeminiClient {
-  GeminiClient(this._api, this._keys, {DateTime Function()? clock})
-    : _now = clock ?? DateTime.now;
+  GeminiClient(
+    this._api,
+    this._keys, {
+    DateTime Function()? clock,
+    this.hedgeAfter = const Duration(seconds: 4),
+  }) : _now = clock ?? DateTime.now;
 
   final GeminiApi _api;
   final GeminiKeyService _keys;
   final DateTime Function() _now;
+
+  /// How long a model may stay silent before the next one is asked too.
+  final Duration hedgeAfter;
 
   static const overloadSkip = Duration(seconds: 20);
   static const dailySkip = Duration(hours: 1);
@@ -82,6 +95,9 @@ class GeminiClient {
   final _health = <String, _Health>{};
   String? _lastKey;
   List<String>? _lastModels;
+
+  /// Opens the connection to Google ahead of the first call.
+  Future<void> warmUp() => _api.warmUp();
 
   /// Forgets every limit and every mark.
   void reset() {
@@ -112,46 +128,83 @@ class GeminiClient {
     }
 
     final hasImage = request.image != null;
+    final start = _now();
     var live = 0;
     final limits = <(String, LimitScope, Duration?)>[];
+    final queue = <String>[];
     for (final model in ids) {
       final health = _health.putIfAbsent(model, _Health.new);
       if (health.unavailable || (hasImage && health.noImages)) continue;
       live++;
-      final now = _now();
       final until = health.skipUntil;
-      if (until != null && until.isAfter(now)) {
+      if (until != null && until.isAfter(start)) {
         // Skipped without a request. Only a limit is reported to the user.
         if (health.skipScope != null) {
-          limits.add((model, health.skipScope!, until.difference(now)));
+          limits.add((model, health.skipScope!, until.difference(start)));
         }
         continue;
       }
-      final attempt = await _ask(key, model, health, request);
-      switch (attempt) {
-        case _Answer(:final text):
-          health.skipUntil = null;
-          health.skipScope = null;
-          return GeminiOk(text, model);
-        case _Stop(:final outcome):
-          return outcome;
-        case _Limit(:final scope, :final retryIn):
-          health.skipScope = scope;
-          final wait = scope == LimitScope.day
-              ? dailySkip
-              : retryIn ?? unknownLimitSkip;
-          health.skipUntil = now.add(wait > dailySkip ? dailySkip : wait);
-          limits.add((model, scope, retryIn));
-        case _Transient():
-          health.skipScope = null;
-          health.skipUntil = now.add(overloadSkip);
-        case _Dead():
-          live--;
-      }
+      queue.add(model);
     }
 
-    // Nothing answered. A limit is told to the user only when it is the reason: every
-    // usable model is limited.
+    final done = Completer<GeminiOutcome>();
+    var inFlight = 0;
+    Timer? hedge;
+
+    void launch() {
+      if (done.isCompleted || queue.isEmpty) return;
+      final model = queue.removeAt(0);
+      final health = _health.putIfAbsent(model, _Health.new);
+      inFlight++;
+      hedge?.cancel();
+      hedge = queue.isEmpty ? null : Timer(hedgeAfter, launch);
+      _ask(key, model, health, request)
+          .catchError((Object _) => const _Transient() as _Attempt)
+          .then((attempt) {
+            inFlight--;
+            final now = _now();
+            switch (attempt) {
+              case _Answer(:final text):
+                health.skipUntil = null;
+                health.skipScope = null;
+                if (!done.isCompleted) done.complete(GeminiOk(text, model));
+              case _Stop(:final outcome):
+                if (!done.isCompleted) done.complete(outcome);
+              case _Limit(:final scope, :final retryIn):
+                health.skipScope = scope;
+                final wait = scope == LimitScope.day
+                    ? dailySkip
+                    : retryIn ?? unknownLimitSkip;
+                health.skipUntil = now.add(wait > dailySkip ? dailySkip : wait);
+                limits.add((model, scope, retryIn));
+              case _Transient():
+                health.skipScope = null;
+                health.skipUntil = now.add(overloadSkip);
+              case _Dead():
+                live--;
+            }
+            if (done.isCompleted) return;
+            // Nobody is asking any more: the next model starts at once.
+            if (inFlight == 0 && queue.isNotEmpty) launch();
+            if (inFlight == 0 && queue.isEmpty && !done.isCompleted) {
+              done.complete(_failure(live, limits));
+            }
+          });
+    }
+
+    if (queue.isEmpty) return _failure(live, limits);
+    launch();
+    final outcome = await done.future;
+    hedge?.cancel();
+    return outcome;
+  }
+
+  /// Nothing answered. A limit is told to the user only when it is the reason: every
+  /// usable model is limited.
+  GeminiOutcome _failure(
+    int live,
+    List<(String, LimitScope, Duration?)> limits,
+  ) {
     if (live > 0 && limits.length == live) {
       if (live == 1) {
         final (model, scope, retryIn) = limits.single;

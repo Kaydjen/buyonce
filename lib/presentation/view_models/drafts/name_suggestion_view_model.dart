@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -41,6 +42,8 @@ class NameSuggestionViewModel extends Notifier<NameSuggestionState> {
   /// language ("Ukrainian").
   Future<void> takePhoto(String language) async {
     if (state.busy) return;
+    // The camera takes seconds: the connection to Google is opened meanwhile.
+    unawaited(ref.read(nameSuggestionRepositoryProvider).warmUp());
     final taken = await ref
         .read(photoServiceProvider)
         .takePhoto(maxSide: photoSide, quality: photoQuality);

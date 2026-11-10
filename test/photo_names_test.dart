@@ -86,6 +86,8 @@ void main() {
       );
       await tapCamera(tester);
       expect(camera.taken, 1);
+      // The connection to Google was opened while the camera was open.
+      expect(api.warmUps, 1);
       for (final n in ['Piątnica Skyr', 'Skyr', 'Jogurt pitny']) {
         expect(find.byKey(ValueKey('chip-$n')), findsOneWidget);
       }

@@ -25,6 +25,13 @@ class ScriptedGeminiApi implements GeminiApi {
 
   /// When set, `generate` waits for it before answering (to see the waiting state).
   Future<void>? gate;
+
+  /// The same for one model: its answers wait for its gate (a slow model).
+  final gates = <String, Future<void>>{};
+  int warmUps = 0;
+
+  @override
+  Future<void> warmUp() async => warmUps++;
   final listCalls = <String?>[];
 
   @override
@@ -64,6 +71,8 @@ class ScriptedGeminiApi implements GeminiApi {
     final call = GeminiCall(apiKey, model, body);
     calls.add(call);
     if (gate != null) await gate;
+    final slow = gates[model];
+    if (slow != null) await slow;
     return respond(call);
   }
 

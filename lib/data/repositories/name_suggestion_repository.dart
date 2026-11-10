@@ -34,6 +34,9 @@ class NameSuggestionRepository {
 
   static const maxNames = 3;
 
+  /// Called when the camera opens: the connection is ready when the photo is.
+  Future<void> warmUp() => _client.warmUp();
+
   static const schema = <String, Object?>{
     'type': 'OBJECT',
     'properties': {
