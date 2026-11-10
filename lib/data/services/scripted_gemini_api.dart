@@ -22,6 +22,9 @@ class ScriptedGeminiApi implements GeminiApi {
   /// Answers `ListModels` by page token (null = the first page).
   final Result<GeminiReply> Function(String? pageToken)? respondList;
   final calls = <GeminiCall>[];
+
+  /// When set, `generate` waits for it before answering (to see the waiting state).
+  Future<void>? gate;
   final listCalls = <String?>[];
 
   @override
@@ -60,6 +63,7 @@ class ScriptedGeminiApi implements GeminiApi {
   }) async {
     final call = GeminiCall(apiKey, model, body);
     calls.add(call);
+    if (gate != null) await gate;
     return respond(call);
   }
 

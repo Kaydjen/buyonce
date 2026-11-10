@@ -5,8 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/app_info.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/theme/style_variant.dart';
-import '../../core/utils/result.dart';
-import '../../data/repositories/gemini_key_repository.dart';
 import '../../domain/models/app_settings.dart';
 import '../../l10n/l10n.dart';
 import '../../domain/models/gemini_task.dart';
@@ -16,11 +14,10 @@ import '../view_models/settings/settings_view_model.dart';
 import '../view_models/settings/style_variant_view_model.dart';
 import '../widgets/account_section.dart';
 import '../widgets/card_action.dart';
-import '../widgets/card_dialog.dart';
+import '../widgets/api_key_dialog.dart';
 import '../widgets/card_sheet.dart';
 import '../widgets/edge_fade.dart';
 import '../widgets/groove.dart';
-import '../widgets/group_dialogs.dart';
 import '../widgets/segment_choice.dart';
 import '../widgets/soft_switch_tile.dart';
 import '../widgets/titled_card.dart';
@@ -261,7 +258,7 @@ class SettingsScreen extends ConsumerWidget {
                       .watch(geminiModelsProvider(GeminiTask.items))
                       .value
                       ?.length,
-                  onEdit: () => _editKey(context, ref),
+                  onEdit: () => showApiKeyDialog(context, ref),
                   onModels: () => Navigator.of(context).push<void>(
                     MaterialPageRoute(builder: (_) => const ModelsScreen()),
                   ),
@@ -297,25 +294,6 @@ class SettingsScreen extends ConsumerWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Future<void> _editKey(BuildContext context, WidgetRef ref) {
-    final l10n = context.l10n;
-    return showCardDialog<void>(
-      context,
-      builder: (_) => PromptDialog(
-        title: l10n.apiKey,
-        hint: l10n.apiKey,
-        confirm: l10n.save,
-        plain: true,
-        onSubmit: (text) async =>
-            switch (await ref.read(geminiKeyProvider.notifier).save(text)) {
-              Ok() => null,
-              Failure(error: GeminiKeyError.invalid) => l10n.invalidApiKey,
-              Failure() => l10n.somethingWrong,
-            },
       ),
     );
   }

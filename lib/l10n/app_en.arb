@@ -320,6 +320,12 @@
     }
   },
   "gemini": "Gemini",
+  "photoTooltip": "Photo",
+  "modelLimitReached": "{model}: limit reached",
+  "@modelLimitReached": {"placeholders": {"model": {"type": "String"}}},
+  "addModels": "Add models",
+  "allModelsLimited": "All models reached their limit",
+  "couldntNameItem": "Couldn't name this item",
   "models": "Models",
   "otherModel": "Other",
   "modelId": "Model ID",

@@ -854,6 +854,36 @@ abstract class AppLocalizations {
   /// **'Gemini'**
   String get gemini;
 
+  /// No description provided for @photoTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo'**
+  String get photoTooltip;
+
+  /// No description provided for @modelLimitReached.
+  ///
+  /// In en, this message translates to:
+  /// **'{model}: limit reached'**
+  String modelLimitReached(String model);
+
+  /// No description provided for @addModels.
+  ///
+  /// In en, this message translates to:
+  /// **'Add models'**
+  String get addModels;
+
+  /// No description provided for @allModelsLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'All models reached their limit'**
+  String get allModelsLimited;
+
+  /// No description provided for @couldntNameItem.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t name this item'**
+  String get couldntNameItem;
+
   /// No description provided for @models.
   ///
   /// In en, this message translates to:

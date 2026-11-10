@@ -447,6 +447,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String get gemini => 'Gemini';
 
   @override
+  String get photoTooltip => 'Photo';
+
+  @override
+  String modelLimitReached(String model) {
+    return '$model: limit reached';
+  }
+
+  @override
+  String get addModels => 'Add models';
+
+  @override
+  String get allModelsLimited => 'All models reached their limit';
+
+  @override
+  String get couldntNameItem => 'Couldn\'t name this item';
+
+  @override
   String get models => 'Models';
 
   @override

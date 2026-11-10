@@ -449,6 +449,23 @@ class AppLocalizationsUk extends AppLocalizations {
   String get gemini => 'Gemini';
 
   @override
+  String get photoTooltip => 'Фото';
+
+  @override
+  String modelLimitReached(String model) {
+    return '$model: ліміт вичерпано';
+  }
+
+  @override
+  String get addModels => 'Додати моделі';
+
+  @override
+  String get allModelsLimited => 'Ліміти всіх моделей вичерпано';
+
+  @override
+  String get couldntNameItem => 'Не вдалося назвати предмет';
+
+  @override
   String get models => 'Моделі';
 
   @override
