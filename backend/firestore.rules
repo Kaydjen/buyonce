@@ -168,7 +168,7 @@ service cloud.firestore {
 
         // `usage` is not in the list: only the Worker changes it.
         allow update: if isMember(gid)
-          && changed().hasOnly(['name', 'position', 'planned', 'plannedBy', 'plannedAt'])
+          && changed().hasOnly(['name', 'position', 'planned', 'plannedBy', 'plannedAt', 'deleted', 'deletedAt'])
           && text(request.resource.data.name, 100)
           && request.resource.data.position is number
           && (request.resource.data.planned == true
@@ -177,7 +177,15 @@ service cloud.firestore {
                 : request.resource.data.plannedBy == me() && request.resource.data.plannedAt == request.time)
             : request.resource.data.planned == false
               && unset(request.resource.data, 'plannedBy')
-              && unset(request.resource.data, 'plannedAt'));
+              && unset(request.resource.data, 'plannedAt'))
+          // Deleted (the archive): the flag and the server time go together, and a
+          // product that is back has neither.
+          && (request.resource.data.get('deleted', false) == true
+            ? (resource.data.get('deleted', false) == true
+                ? !('deleted' in changed()) && !('deletedAt' in changed())
+                : request.resource.data.deletedAt == request.time)
+            : unset(request.resource.data, 'deleted')
+              && unset(request.resource.data, 'deletedAt'));
 
         allow delete: if isMember(gid);
       }

@@ -320,6 +320,12 @@
     }
   },
   "gemini": "Gemini",
+  "productDeleted": "Deleted: {name}",
+  "@productDeleted": {"placeholders": {"name": {"type": "String"}}},
+  "nameTaken": "Already in the list",
+  "moveProduct": "Move",
+  "archive": "Archive",
+  "restore": "Restore",
   "photoTooltip": "Photo",
   "modelLimitReached": "{model}: limit reached",
   "@modelLimitReached": {"placeholders": {"model": {"type": "String"}}},

@@ -54,6 +54,7 @@ class ListSnapshot {
     'plannedBy': p.plannedBy,
     'plannedAt': _time(p.plannedAt),
     'usage': p.usage,
+    if (p.deleted) ...{'deleted': true, 'deletedAt': _time(p.deletedAt)},
   };
 
   static Product _parseProduct(Map m) => Product(
@@ -65,6 +66,8 @@ class ListSnapshot {
     plannedBy: m['plannedBy'] as String?,
     plannedAt: _parseTime(m['plannedAt']),
     usage: m['usage'] as int,
+    deleted: m['deleted'] == true,
+    deletedAt: _parseTime(m['deletedAt']),
   );
 
   static Map<String, Object?> _plan(Plan p) => {

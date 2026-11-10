@@ -35,6 +35,10 @@ Product productFromData(String groupId, String id, Doc data) => Product(
   plannedBy: data['plannedBy'] as String?,
   plannedAt: data['planned'] == true ? _time(data['plannedAt']) : null,
   usage: (data['usage'] as num?)?.toInt() ?? 0,
+  deleted: data['deleted'] == true,
+  deletedAt: data['deleted'] == true && data['deletedAt'] != null
+      ? _time(data['deletedAt'])
+      : null,
 );
 
 Trip tripFromData(String groupId, String id, Doc data) {
@@ -88,6 +92,7 @@ Notice noticeFromData(String groupId, String id, Doc data) => Notice(
 Map<String, Object?> productChange(
   Product p, {
   required bool wasPlanned,
+  bool wasDeleted = false,
   required String me,
 }) => {
   'name': p.name,
@@ -100,6 +105,14 @@ Map<String, Object?> productChange(
   if (!p.planned && wasPlanned) ...{
     'plannedBy': FieldValue.delete(),
     'plannedAt': FieldValue.delete(),
+  },
+  if (p.deleted && !wasDeleted) ...{
+    'deleted': true,
+    'deletedAt': FieldValue.serverTimestamp(),
+  },
+  if (!p.deleted && wasDeleted) ...{
+    'deleted': FieldValue.delete(),
+    'deletedAt': FieldValue.delete(),
   },
 };
 
@@ -318,13 +331,19 @@ class FirebaseListService implements ListService {
     return const Ok<void>(null);
   }
 
-  /// Which of the products are planned now, by id, from the local data.
-  Future<Map<String, bool>> _plannedNow(String groupId) async => {
+  /// Which of the products are planned and which deleted now, by id, from the local
+  /// data.
+  Future<Map<String, ({bool planned, bool deleted})>> _stateNow(
+    String groupId,
+  ) async => {
     for (final d in (await _local(
       _col(groupId, 'products'),
       '$groupId/products',
     )).docs)
-      d.id: d.data()['planned'] == true,
+      d.id: (
+        planned: d.data()['planned'] == true,
+        deleted: d.data()['deleted'] == true,
+      ),
   };
 
   @override
@@ -336,12 +355,17 @@ class FirebaseListService implements ListService {
       _guard(() async {
         if (products.isEmpty) return;
         final groupId = products.first.groupId;
-        final planned = await _plannedNow(groupId);
+        final now = await _stateNow(groupId);
         final batch = _db.batch();
         for (final p in products) {
           batch.update(
             _col(groupId, 'products').doc(p.id),
-            productChange(p, wasPlanned: planned[p.id] ?? false, me: _uid()),
+            productChange(
+              p,
+              wasPlanned: now[p.id]?.planned ?? false,
+              wasDeleted: now[p.id]?.deleted ?? false,
+              me: _uid(),
+            ),
           );
         }
         _report(batch.commit());
@@ -488,7 +512,7 @@ class FirebaseListService implements ListService {
   @override
   Future<Result<void>> closeTrip(Trip trip, {required List<String> notify}) =>
       _guard(() async {
-        final planned = await _plannedNow(trip.groupId);
+        final now = await _stateNow(trip.groupId);
         final batch = _db.batch();
         batch.update(_col(trip.groupId, 'trips').doc(trip.id), {
           'sentAt': FieldValue.serverTimestamp(),
@@ -496,7 +520,7 @@ class FirebaseListService implements ListService {
           'autoSendAt': Timestamp.fromDate(DateTime.now().add(sendLease)),
         });
         for (final m in trip.marks) {
-          if (planned[m.productId] == true) {
+          if (now[m.productId]?.planned == true) {
             batch.update(_col(trip.groupId, 'products').doc(m.productId), {
               'planned': false,
               'plannedBy': FieldValue.delete(),

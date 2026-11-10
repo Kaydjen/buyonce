@@ -448,6 +448,67 @@ describe('products', () => {
     }));
     await assertFails(updateDoc(doc(db, 'groups/g1/products/milk'), { name: '' }));
   });
+
+  // The archive: a deleted product keeps its document, with the flag and the server time.
+  describe('the archive', () => {
+    const del = (db, id = 'milk') => updateDoc(doc(db, `groups/g1/products/${id}`), {
+      deleted: true, deletedAt: serverTimestamp(),
+    });
+
+    it('a member deletes a product and brings it back', async () => {
+      const db = as('bob');
+      await assertSucceeds(del(db));
+      await assertSucceeds(updateDoc(doc(db, 'groups/g1/products/milk'), {
+        deleted: deleteField(), deletedAt: deleteField(),
+      }));
+    });
+
+    it('a needed product is deleted and un-planned in one write', async () => {
+      const db = as('bob');
+      await assertSucceeds(updateDoc(doc(db, 'groups/g1/products/milk'), {
+        planned: true, plannedBy: 'bob', plannedAt: serverTimestamp(),
+      }));
+      await assertSucceeds(updateDoc(doc(db, 'groups/g1/products/milk'), {
+        deleted: true, deletedAt: serverTimestamp(),
+        planned: false, plannedBy: deleteField(), plannedAt: deleteField(),
+      }));
+    });
+
+    it('an archived product is renamed and restored under the new name', async () => {
+      const db = as('bob');
+      await assertSucceeds(del(db));
+      await assertSucceeds(updateDoc(doc(db, 'groups/g1/products/milk'), { name: 'Milk 1l' }));
+      await assertSucceeds(updateDoc(doc(db, 'groups/g1/products/milk'), {
+        name: 'Milk 2l', deleted: deleteField(), deletedAt: deleteField(), position: -1,
+      }));
+    });
+
+    it('the time cannot be forged or left out, and false is not stored', async () => {
+      const db = as('bob');
+      await assertFails(updateDoc(doc(db, 'groups/g1/products/milk'), { deleted: true }));
+      await assertFails(updateDoc(doc(db, 'groups/g1/products/milk'), {
+        deleted: true, deletedAt: Timestamp.fromMillis(0),
+      }));
+      await assertFails(updateDoc(doc(db, 'groups/g1/products/milk'), { deleted: false }));
+      await assertFails(updateDoc(doc(db, 'groups/g1/products/milk'), { deletedAt: serverTimestamp() }));
+      await assertFails(updateDoc(doc(db, 'groups/g1/products/milk'), {
+        deleted: 'yes', deletedAt: serverTimestamp(),
+      }));
+    });
+
+    it('the deleted time cannot be changed while the product stays deleted', async () => {
+      const db = as('bob');
+      await assertSucceeds(del(db));
+      await assertFails(updateDoc(doc(db, 'groups/g1/products/milk'), { deletedAt: serverTimestamp() }));
+    });
+
+    it('a product is never created already deleted; a stranger cannot delete', async () => {
+      await assertFails(setDoc(doc(as('bob'), 'groups/g1/products/x'), {
+        name: 'X', position: 3, planned: false, usage: 0, deleted: true, deletedAt: serverTimestamp(),
+      }));
+      await assertFails(del(as('mallory')));
+    });
+  });
 });
 
 describe('trips', () => {

@@ -449,6 +449,23 @@ class AppLocalizationsUk extends AppLocalizations {
   String get gemini => 'Gemini';
 
   @override
+  String productDeleted(String name) {
+    return 'Видалено: $name';
+  }
+
+  @override
+  String get nameTaken => 'Вже є в списку';
+
+  @override
+  String get moveProduct => 'Перемістити';
+
+  @override
+  String get archive => 'Архів';
+
+  @override
+  String get restore => 'Відновити';
+
+  @override
   String get photoTooltip => 'Фото';
 
   @override

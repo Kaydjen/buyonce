@@ -14,6 +14,9 @@ class ProductRow extends StatelessWidget {
     this.minHeight = 56,
     required this.showDivider,
     required this.onTap,
+    this.onLongPress,
+    this.menuLink,
+    this.handle,
   });
 
   final String name;
@@ -38,6 +41,19 @@ class ProductRow extends StatelessWidget {
   final double minHeight;
   final bool showDivider;
   final VoidCallback onTap;
+
+  /// Long press opens the row's menu (rename, delete).
+  final VoidCallback? onLongPress;
+
+  /// Set while this row's menu is open: the menu follows the row through it.
+  final LayerLink? menuLink;
+
+  /// Set while the menu is open and the row can be reordered: the row slides to the
+  /// right and shows it at the left (the drag handle; a drag starts from it only).
+  final Widget? handle;
+
+  /// How far the row moves to make room for the handle.
+  static const handleSlot = 40.0;
 
   @override
   Widget build(BuildContext context) {
@@ -153,41 +169,71 @@ class ProductRow extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(t.radiusRow),
         onTap: onTap,
-        child: needed && !taken
-            ? Stack(
-                children: [
-                  content,
-                  Positioned(
-                    left: t.needDot ? 12 : 0,
-                    top: 0,
-                    bottom: 0,
-                    child: t.needDot
-                        ? Center(
-                            child: Container(
-                              key: const Key('needMark'),
-                              width: 8,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                // Grey, not the accent: every needed product has one.
-                                color: t.muted.withValues(alpha: 0.75),
-                                shape: BoxShape.circle,
+        onLongPress: onLongPress,
+        child: _withHandle(
+          needed && !taken
+              ? Stack(
+                  children: [
+                    content,
+                    Positioned(
+                      left: t.needDot ? 12 : 0,
+                      top: 0,
+                      bottom: 0,
+                      child: t.needDot
+                          ? Center(
+                              child: Container(
+                                key: const Key('needMark'),
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  // Grey, not the accent: every needed product has one.
+                                  color: t.muted.withValues(alpha: 0.75),
+                                  shape: BoxShape.circle,
+                                ),
                               ),
+                            )
+                          : Container(
+                              key: const Key('needMark'),
+                              width: t.barWidth,
+                              color: t.needMark,
                             ),
-                          )
-                        : Container(
-                            key: const Key('needMark'),
-                            width: t.barWidth,
-                            color: t.needMark,
-                          ),
-                  ),
-                ],
-              )
-            : content,
+                    ),
+                  ],
+                )
+              : content,
+        ),
       ),
     );
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: t.inset, vertical: gap),
-      child: tile,
+      child: menuLink == null
+          ? tile
+          : CompositedTransformTarget(link: menuLink!, child: tile),
     );
   }
+
+  /// The row content slides right when the handle is shown, which appears at the left.
+  Widget _withHandle(Widget content) => Stack(
+    children: [
+      AnimatedPadding(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: EdgeInsets.only(left: handle == null ? 0 : handleSlot),
+        child: content,
+      ),
+      if (handle != null)
+        Positioned(
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: handleSlot,
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: 1),
+            duration: const Duration(milliseconds: 180),
+            builder: (context, v, child) => Opacity(opacity: v, child: child),
+            child: Center(child: handle),
+          ),
+        ),
+    ],
+  );
 }

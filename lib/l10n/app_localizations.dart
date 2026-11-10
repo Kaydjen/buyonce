@@ -854,6 +854,36 @@ abstract class AppLocalizations {
   /// **'Gemini'**
   String get gemini;
 
+  /// No description provided for @productDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted: {name}'**
+  String productDeleted(String name);
+
+  /// No description provided for @nameTaken.
+  ///
+  /// In en, this message translates to:
+  /// **'Already in the list'**
+  String get nameTaken;
+
+  /// No description provided for @moveProduct.
+  ///
+  /// In en, this message translates to:
+  /// **'Move'**
+  String get moveProduct;
+
+  /// No description provided for @archive.
+  ///
+  /// In en, this message translates to:
+  /// **'Archive'**
+  String get archive;
+
+  /// No description provided for @restore.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore'**
+  String get restore;
+
   /// No description provided for @photoTooltip.
   ///
   /// In en, this message translates to:

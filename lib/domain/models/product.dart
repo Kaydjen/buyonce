@@ -8,6 +8,8 @@ class Product {
     this.plannedBy,
     this.plannedAt,
     this.usage = 0,
+    this.deleted = false,
+    this.deletedAt,
   });
 
   final String id;
@@ -30,6 +32,14 @@ class Product {
   /// raises it when a trip is sent (backend rules); a new product has 0.
   final int usage;
 
+  /// Taken out of the lists by the user (the "archive"): the product stays, so trips,
+  /// plans and the history still know it, but no list, search or ranking shows it. It
+  /// comes back through Restore, or when its name is added again.
+  final bool deleted;
+
+  /// When it was deleted; null while it is not.
+  final DateTime? deletedAt;
+
   /// Planning sets [plannedBy] and [plannedAt] (when given), un-planning clears them.
   Product copyWith({
     String? name,
@@ -38,8 +48,11 @@ class Product {
     String? plannedBy,
     DateTime? plannedAt,
     int? usage,
+    bool? deleted,
+    DateTime? deletedAt,
   }) {
     final isPlanned = planned ?? this.planned;
+    final isDeleted = deleted ?? this.deleted;
     return Product(
       id: id,
       groupId: groupId,
@@ -49,6 +62,8 @@ class Product {
       plannedBy: isPlanned ? plannedBy ?? this.plannedBy : null,
       plannedAt: isPlanned ? plannedAt ?? this.plannedAt : null,
       usage: usage ?? this.usage,
+      deleted: isDeleted,
+      deletedAt: isDeleted ? deletedAt ?? this.deletedAt : null,
     );
   }
 }

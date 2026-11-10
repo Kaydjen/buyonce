@@ -620,22 +620,6 @@ void main() {
     expect(top('Bananas') < top('Bread'), isTrue);
   });
 
-  testWidgets('long press drag moves a product', (tester) async {
-    await pumpApp(tester);
-    double top(String name) => tester.getTopLeft(find.text(name)).dy;
-    expect(top('Bread') < top('Eggs'), isTrue);
-
-    final gesture = await tester.startGesture(
-      tester.getCenter(find.text('Bread')),
-    );
-    await tester.pump(const Duration(milliseconds: 700));
-    await gesture.moveBy(const Offset(0, 120));
-    await tester.pump();
-    await gesture.up();
-    await tester.pumpAndSettle();
-    expect(top('Eggs') < top('Bread'), isTrue);
-  });
-
   testWidgets('quick add applies a past plan and says how many', (
     tester,
   ) async {

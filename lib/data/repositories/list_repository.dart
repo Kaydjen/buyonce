@@ -8,6 +8,7 @@ import '../../domain/models/group.dart';
 import '../../domain/models/notice.dart';
 import '../../domain/models/plan.dart';
 import '../../domain/models/product.dart';
+import '../../domain/models/product_names.dart';
 import '../../domain/models/purchase.dart';
 import '../../domain/models/sort_key.dart';
 import '../../domain/models/trip.dart';
@@ -22,11 +23,25 @@ class ListRepository {
   final GroupRepository _groups;
   final String groupId;
 
+  /// The products the lists show: the deleted ones (the archive) are not among them.
   Future<Result<List<Product>>> getProducts() =>
       _service.getProducts(groupId).map(_inCatalogOrder);
 
-  static List<Product> _inCatalogOrder(List<Product> products) =>
-      [...products]..sort(byPosition);
+  static List<Product> _inCatalogOrder(List<Product> products) => [
+    for (final p in products)
+      if (!p.deleted) p,
+  ]..sort(byPosition);
+
+  /// The deleted products, the latest deleted first.
+  static List<Product> _archived(List<Product> products) =>
+      [
+        for (final p in products)
+          if (p.deleted) p,
+      ]..sort((a, b) {
+        final x = a.deletedAt, y = b.deletedAt;
+        if (x == null || y == null) return x == null ? (y == null ? 0 : 1) : -1;
+        return y.compareTo(x);
+      });
 
   static List<Plan> _templatesFirst(List<Plan> plans) =>
       [...plans]..sort((a, b) {
@@ -43,6 +58,10 @@ class ListRepository {
   /// change, my own writes included, before the server has answered.
   Stream<Result<List<Product>>> watchProducts() =>
       _service.watchProducts(groupId).map((r) => r.map(_inCatalogOrder));
+
+  /// The deleted products of the group, the latest deleted first.
+  Stream<Result<List<Product>>> watchArchive() =>
+      _service.watchProducts(groupId).map((r) => r.map(_archived));
 
   Stream<Result<List<Trip>>> watchOpenTrips() =>
       _service.watchOpenTrips(groupId);
@@ -101,6 +120,21 @@ class ListRepository {
     final position = atStart
         ? products.fold(0.0, (m, p) => p.position < m ? p.position : m) - 1
         : products.fold(-1.0, (m, p) => p.position > m ? p.position : m) + 1;
+    // The name of a deleted product brings that product back, with its usage.
+    final back = products
+        .where((p) => p.deleted && ProductNames.same(p.name, name))
+        .firstOrNull;
+    if (back != null) {
+      final restored = back.copyWith(
+        name: ProductNames.normalize(name),
+        deleted: false,
+        position: position,
+        planned: planned,
+        plannedBy: planned ? userId : null,
+        plannedAt: planned ? DateTime.now() : null,
+      );
+      return (await _service.updateProduct(restored)).map((_) => restored);
+    }
     final product = Product(
       id: newId(),
       groupId: groupId,
@@ -124,9 +158,12 @@ class ListRepository {
     }
     final products = await _service.getProducts(groupId);
     if (products case Failure(:final error)) return Failure(error);
+    final all = (products as Ok<List<Product>>).value;
+    // A deleted product is found by its name too (it comes back); an active product of
+    // the same name wins.
     final byName = {
-      for (final p in (products as Ok<List<Product>>).value)
-        p.name.toLowerCase(): p,
+      for (final p in all.where((p) => p.deleted)) p.name.toLowerCase(): p,
+      for (final p in all.where((p) => !p.deleted)) p.name.toLowerCase(): p,
     };
     var changed = 0;
     // Each new product goes before all others, so the last name is added first.
@@ -140,6 +177,24 @@ class ListRepository {
           atStart: true,
           userId: userId,
         );
+      } else if (existing.deleted) {
+        final fresh = await _service.getProducts(groupId);
+        if (fresh case Failure(:final error)) return Failure(error);
+        final top =
+            (fresh as Ok<List<Product>>).value.fold(
+              0.0,
+              (m, p) => p.position < m ? p.position : m,
+            ) -
+            1;
+        saved = await _service.updateProduct(
+          existing.copyWith(
+            deleted: false,
+            position: top,
+            planned: true,
+            plannedBy: userId,
+            plannedAt: DateTime.now(),
+          ),
+        );
       } else if (existing.planned) {
         continue;
       } else {
@@ -150,6 +205,51 @@ class ListRepository {
     }
     return Ok(changed);
   }
+
+  /// A new name for [product] (cleaned by [ProductNames]; the caller has checked it).
+  Future<Result<void>> renameProduct(Product product, String name) => _service
+      .updateProduct(product.copyWith(name: ProductNames.normalize(name)));
+
+  /// Takes the product out of the lists (the archive): it stops being needed, and the
+  /// user's own mark of it leaves the open trip (a partner's mark stays).
+  Future<Result<void>> deleteProduct(Product product, String userId) async {
+    final unmarked = await setMarks([product.id], userId, marked: false);
+    if (unmarked case Failure(:final error)) return Failure(error);
+    return _service.updateProduct(
+      product.copyWith(
+        deleted: true,
+        deletedAt: DateTime.now(),
+        planned: false,
+      ),
+    );
+  }
+
+  /// Undo of [deleteProduct]: [original] (as it was before) is back, planned again by
+  /// [userId] when it was needed.
+  Future<Result<void>> undeleteProduct(Product original, String userId) =>
+      _service.updateProduct(
+        original.copyWith(
+          deleted: false,
+          plannedBy: original.planned ? userId : null,
+          plannedAt: original.planned ? DateTime.now() : null,
+        ),
+      );
+
+  /// Brings an archived product back under [name], not needed, on top of the list; its
+  /// usage is kept.
+  Future<Result<void>> restoreProduct(Product archived, String name) =>
+      _service.getProducts(groupId).andThen((products) {
+        final top =
+            products.fold(0.0, (m, p) => p.position < m ? p.position : m) - 1;
+        return _service.updateProduct(
+          archived.copyWith(
+            name: ProductNames.normalize(name),
+            deleted: false,
+            planned: false,
+            position: top,
+          ),
+        );
+      });
 
   /// Planning records [userId] and the time; un-planning clears them.
   Future<Result<void>> setPlanned(
@@ -175,7 +275,7 @@ class ListRepository {
         final now = DateTime.now();
         return _service.updateProducts([
           for (final id in plan.productIds)
-            if (byId[id] case final p? when !p.planned)
+            if (byId[id] case final p? when !p.planned && !p.deleted)
               p.copyWith(planned: true, plannedBy: userId, plannedAt: now),
         ]);
       });

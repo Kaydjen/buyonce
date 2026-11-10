@@ -447,6 +447,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String get gemini => 'Gemini';
 
   @override
+  String productDeleted(String name) {
+    return 'Deleted: $name';
+  }
+
+  @override
+  String get nameTaken => 'Already in the list';
+
+  @override
+  String get moveProduct => 'Move';
+
+  @override
+  String get archive => 'Archive';
+
+  @override
+  String get restore => 'Restore';
+
+  @override
   String get photoTooltip => 'Photo';
 
   @override

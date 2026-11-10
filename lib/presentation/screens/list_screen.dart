@@ -9,8 +9,10 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_tokens.dart';
+import '../../core/utils/clip.dart';
 import '../../domain/models/group.dart';
 import '../../domain/models/product.dart';
+import '../../domain/models/product_names.dart';
 import '../../l10n/l10n.dart';
 import '../view_models/account/account_view_model.dart';
 import '../view_models/groups/groups_view_model.dart';
@@ -38,13 +40,17 @@ import '../widgets/panel.dart';
 import '../widgets/plain_button.dart';
 import '../widgets/plans_sheet.dart';
 import '../widgets/product_row.dart';
+import '../widgets/card_dialog.dart';
 import '../widgets/raised_icon.dart';
+import '../widgets/row_menu.dart';
 import '../widgets/send_button.dart';
 import '../widgets/sign_in_prompt.dart';
 import '../widgets/sort_sheet.dart';
 import '../widgets/toast.dart';
 import '../widgets/top_bar.dart';
+import '../view_models/list/archive_view_model.dart';
 import 'add_products_screen.dart';
+import 'archive_screen.dart';
 import 'group_screen.dart';
 import 'history_screen.dart';
 import 'settings_screen.dart';
@@ -63,6 +69,12 @@ class _ListScreenState extends ConsumerState<ListScreen>
   final _scroll = ScrollController();
   final _frequentKey = GlobalKey();
   final _selectKey = GlobalKey();
+
+  /// The product whose row shows the long-press menu and the drag handle; one at a time.
+  String? _menuId;
+  OverlayEntry? _menuEntry;
+  final _menuLink = LayerLink();
+  final _menuGroup = Object();
 
   final _barKey = GlobalKey();
   final _stackKey = GlobalKey();
@@ -125,7 +137,13 @@ class _ListScreenState extends ConsumerState<ListScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _scroll.addListener(_updateDock);
+    _scroll.addListener(_closeMenuOnScroll);
     _glide.addListener(_updateDock);
+  }
+
+  /// Scrolling the list closes the row menu (its anchor moves away).
+  void _closeMenuOnScroll() {
+    if (_menuEntry != null) _closeMenu();
   }
 
   /// The laid-out box of a keyed widget, or null when it is not built, not laid out yet
@@ -287,6 +305,8 @@ class _ListScreenState extends ConsumerState<ListScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _menuEntry?.remove();
+    _menuEntry = null;
     _sentTimer?.cancel();
     _searchFocus.dispose();
     _search.dispose();
@@ -598,6 +618,8 @@ class _ListScreenState extends ConsumerState<ListScreen>
   Widget build(BuildContext context) {
     final async = ref.watch(listViewModelProvider);
     final vm = ref.read(listViewModelProvider.notifier);
+    // Kept alive for the menu: "Archive" shows only while something is deleted.
+    ref.watch(archivedProductsProvider);
     final float = context.tokens.floatTabs;
     // While another group loads the old one's controls are gone, not tappable.
     final ready = async.hasValue && !async.isLoading;
@@ -1122,6 +1144,9 @@ class _ListScreenState extends ConsumerState<ListScreen>
         if (!shop) CardMenuItem('sort', context.l10n.sort),
         if (!shop && s.plans.isNotEmpty)
           CardMenuItem('plans', context.l10n.templates),
+        if (!shop &&
+            (ref.read(archivedProductsProvider).value?.isNotEmpty ?? false))
+          CardMenuItem('archive', context.l10n.archive),
         CardMenuItem('history', context.l10n.history),
         CardMenuItem(
           'settings',
@@ -1138,6 +1163,10 @@ class _ListScreenState extends ConsumerState<ListScreen>
         await _sort();
       case 'plans':
         await showPlansSheet(context);
+      case 'archive':
+        await Navigator.of(
+          context,
+        ).push<void>(MaterialPageRoute(builder: (_) => const ArchiveScreen()));
       case 'history':
         await Navigator.of(
           context,
@@ -1151,6 +1180,79 @@ class _ListScreenState extends ConsumerState<ListScreen>
 
   String _nameOf(String? userId) =>
       userId == null ? '' : ref.watch(userNameProvider(userId));
+
+  /// Long press: the rename/delete card floats above the row (below it when the row is
+  /// at the top of the screen) and the row shows its drag handle.
+  void _openRowMenu(Product p, BuildContext rowContext) {
+    Haptics.tick(context);
+    _closeMenu();
+    final box = rowContext.findRenderObject() as RenderBox;
+    final top = box.localToGlobal(Offset.zero).dy;
+    final above = top > MediaQuery.paddingOf(context).top + 96;
+    setState(() => _menuId = p.id);
+    _menuEntry = OverlayEntry(
+      builder: (_) => Positioned(
+        left: 0,
+        top: 0,
+        child: CompositedTransformFollower(
+          link: _menuLink,
+          showWhenUnlinked: false,
+          targetAnchor: above ? Alignment.topRight : Alignment.bottomRight,
+          followerAnchor: above ? Alignment.bottomRight : Alignment.topRight,
+          offset: Offset(-16, above ? -4 : 4),
+          child: TapRegion(
+            groupId: _menuGroup,
+            onTapOutside: (_) => _closeMenu(),
+            child: RowMenuCard(
+              onRename: () => _renameProduct(p),
+              onDelete: () => _deleteProduct(p),
+            ),
+          ),
+        ),
+      ),
+    );
+    Overlay.of(context).insert(_menuEntry!);
+  }
+
+  void _closeMenu() {
+    _menuEntry?.remove();
+    _menuEntry = null;
+    if (_menuId != null && mounted) setState(() => _menuId = null);
+  }
+
+  Future<void> _renameProduct(Product p) async {
+    _closeMenu();
+    final l10n = context.l10n;
+    final vm = ref.read(listViewModelProvider.notifier);
+    await showCardDialog<void>(
+      context,
+      builder: (_) => PromptDialog(
+        title: l10n.rename,
+        hint: l10n.nameHint,
+        confirm: l10n.save,
+        initial: p.name,
+        maxLength: maxProductNameLength,
+        onSubmit: (text) async => switch (await vm.renameProduct(p, text)) {
+          null => null,
+          NameProblem.duplicate => l10n.nameTaken,
+          NameProblem.empty => l10n.enterName,
+        },
+      ),
+    );
+  }
+
+  Future<void> _deleteProduct(Product p) async {
+    _closeMenu();
+    final vm = ref.read(listViewModelProvider.notifier);
+    await vm.deleteProduct(p);
+    if (!mounted) return;
+    showToast(
+      context,
+      context.l10n.productDeleted(p.name),
+      actionLabel: context.l10n.undo,
+      onAction: () => vm.undoDeleteProduct(p),
+    );
+  }
 
   /// "New · Anna": who added the products, once each, in the order of the rows.
   String _newLabel(ListState s) {
@@ -1216,22 +1318,22 @@ class _ListScreenState extends ConsumerState<ListScreen>
       physics: const NeverScrollableScrollPhysics(),
       buildDefaultDragHandles: false,
       itemCount: products.length,
+      // The menu is anchored to the row: it must be gone before the row is lifted.
+      onReorderStart: (_) => _closeMenu(),
       onReorderItem: (oldIndex, newIndex) =>
           vm.reorder(group: products, oldIndex: oldIndex, newIndex: newIndex),
       itemBuilder: (context, i) {
         final p = products[i];
-        return ReorderableDelayedDragStartListener(
+        return _row(
+          s,
+          p,
+          vm,
           key: ValueKey(p.id),
-          index: i,
-          enabled: s.canReorder,
-          child: _row(
-            s,
-            p,
-            vm,
-            divider: divider || i > 0,
-            // The same product can be in a search result too; only one blinks.
-            flash: !(s.finding && planned == true),
-          ),
+          // The drag starts from the handle that a long press shows.
+          reorderIndex: s.canReorder ? i : null,
+          divider: divider || i > 0,
+          // The same product can be in a search result too; only one blinks.
+          flash: !(s.finding && planned == true),
         );
       },
     );
@@ -1245,6 +1347,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
     Key? key,
     required bool divider,
     bool flash = true,
+    int? reorderIndex,
   }) {
     final plan = s.mode == ListMode.need;
     final mark = s.markOf(p.id);
@@ -1256,32 +1359,54 @@ class _ListScreenState extends ConsumerState<ListScreen>
       key: key,
       flash: flash && s.flashId == p.id,
       onDone: ref.read(listViewModelProvider.notifier).clearFlash,
-      child: ProductRow(
-        name: p.name,
-        mark: mark,
-        needed: plan && p.planned,
-        takenBy: _nameOf(s.partnerOf(p.id)),
-        addedBy: addedBy,
-        minHeight: plan ? 56 : 64,
-        showDivider: divider,
-        onTap: () {
-          if (mark == RowMark.partner) {
-            _hintTaken(
-              context.l10n.alreadyBoughtBy(_nameOf(s.partnerOf(p.id))),
-            );
-            return;
-          }
-          // Plan never unmarks: a product that vanished from the trip would
-          // raise "where did it go".
-          if (plan && mark == RowMark.mine) {
-            _hintTaken(context.l10n.youAlreadyBought);
-            return;
-          }
-          if (s.mode == ListMode.buy) {
-            Haptics.tick(context);
-          }
-          vm.tap(p);
-        },
+      // A tap on a row is not "outside" the menu: the row closes it itself.
+      child: TapRegion(
+        groupId: _menuGroup,
+        child: Builder(
+          builder: (rowContext) => ProductRow(
+            name: p.name,
+            mark: mark,
+            needed: plan && p.planned,
+            takenBy: _nameOf(s.partnerOf(p.id)),
+            addedBy: addedBy,
+            minHeight: plan ? 56 : 64,
+            showDivider: divider,
+            onLongPress: () => _openRowMenu(p, rowContext),
+            menuLink: _menuId == p.id ? _menuLink : null,
+            handle: _menuId == p.id && reorderIndex != null
+                ? TapRegion(
+                    groupId: _menuGroup,
+                    child: ReorderableDragStartListener(
+                      index: reorderIndex,
+                      child: DragHandle(key: Key('dragHandle-${p.id}')),
+                    ),
+                  )
+                : null,
+            onTap: () {
+              // A tap anywhere in the list only closes an open menu.
+              if (_menuId != null) {
+                _closeMenu();
+                return;
+              }
+              if (mark == RowMark.partner) {
+                _hintTaken(
+                  context.l10n.alreadyBoughtBy(_nameOf(s.partnerOf(p.id))),
+                );
+                return;
+              }
+              // Plan never unmarks: a product that vanished from the trip would
+              // raise "where did it go".
+              if (plan && mark == RowMark.mine) {
+                _hintTaken(context.l10n.youAlreadyBought);
+                return;
+              }
+              if (s.mode == ListMode.buy) {
+                Haptics.tick(context);
+              }
+              vm.tap(p);
+            },
+          ),
+        ),
       ),
     );
   }

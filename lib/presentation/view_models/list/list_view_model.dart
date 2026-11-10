@@ -7,6 +7,7 @@ import '../../../data/repositories/list_repository.dart';
 import '../../../domain/models/notice.dart';
 import '../../../domain/models/plan.dart';
 import '../../../domain/models/product.dart';
+import '../../../domain/models/product_names.dart';
 import '../../../domain/models/sort_key.dart';
 import '../../../domain/models/trip.dart';
 import '../groups/groups_view_model.dart';
@@ -410,6 +411,48 @@ class ListViewModel extends AsyncNotifier<ListState> {
         below: newIndex < moved.length - 1 ? moved[newIndex + 1].id : null,
       ),
     );
+  }
+
+  /// Renames [product]. Returns what is wrong with [raw] (nothing is saved then), or null
+  /// when the name was saved. The name may differ from the old one only in letter case.
+  Future<NameProblem?> renameProduct(Product product, String raw) async {
+    final check = ProductNames.check(
+      raw,
+      state.requireValue.products,
+      selfId: product.id,
+    );
+    if (!check.ok) return check.problem;
+    if (check.name != product.name) {
+      await _apply((repo) => repo.renameProduct(product, check.name));
+    }
+    return null;
+  }
+
+  /// Takes [product] out of the lists (it goes to the archive); the user's own mark of
+  /// it goes too. [undoDeleteProduct] brings it back.
+  Future<void> deleteProduct(Product product) async {
+    final userId = ref.read(currentUserIdProvider);
+    final s = state.requireValue;
+    final marked = s.myMarkIds.contains(product.id);
+    await _apply((repo) => repo.deleteProduct(product, userId));
+    if (marked) {
+      _restartIdleTimer(userId, hasMarks: s.myMarkIds.length > 1);
+    }
+  }
+
+  /// Undo of [deleteProduct]: [product] as it was before comes back.
+  Future<void> undoDeleteProduct(Product product) {
+    final userId = ref.read(currentUserIdProvider);
+    return _apply((repo) => repo.undeleteProduct(product, userId));
+  }
+
+  /// Brings an archived product back under [raw]. Returns what is wrong with the name
+  /// (a product of the list already has it), or null when it is back.
+  Future<NameProblem?> restoreProduct(Product archived, String raw) async {
+    final check = ProductNames.check(raw, state.requireValue.products);
+    if (!check.ok) return check.problem;
+    await _apply((repo) => repo.restoreProduct(archived, check.name));
+    return null;
   }
 
   /// Returns how many products became needed (those already needed do not count).
