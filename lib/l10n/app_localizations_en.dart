@@ -447,6 +447,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get gemini => 'Gemini';
 
   @override
+  String get models => 'Models';
+
+  @override
+  String get otherModel => 'Other';
+
+  @override
+  String get modelId => 'Model ID';
+
+  @override
+  String get invalidModelId => 'That is not a model ID';
+
+  @override
+  String get modelAlreadyAdded => 'Already in the list';
+
+  @override
+  String get addApiKeyFirst => 'Add an API key first';
+
+  @override
+  String get apiKeyRejected => 'Google did not accept the API key';
+
+  @override
+  String get reset => 'Reset';
+
+  @override
   String get apiKey => 'API key';
 
   @override

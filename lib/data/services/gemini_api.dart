@@ -25,6 +25,12 @@ abstract interface class GeminiApi {
     required String model,
     required Map<String, Object?> body,
   });
+
+  /// One page of the models this key can see (`ListModels`).
+  Future<Result<GeminiReply>> listModels({
+    required String apiKey,
+    String? pageToken,
+  });
 }
 
 class HttpGeminiApi implements GeminiApi {
@@ -41,17 +47,40 @@ class HttpGeminiApi implements GeminiApi {
     required String apiKey,
     required String model,
     required Map<String, Object?> body,
-  }) async {
+  }) => _send(
+    'POST',
+    Uri.parse('$baseUrl/models/$model:generateContent'),
+    apiKey,
+    body,
+  );
+
+  @override
+  Future<Result<GeminiReply>> listModels({
+    required String apiKey,
+    String? pageToken,
+  }) => _send(
+    'GET',
+    Uri.parse('$baseUrl/models')
+        .replace(queryParameters: {'pageSize': '100', 'pageToken': ?pageToken}),
+    apiKey,
+    null,
+  );
+
+  Future<Result<GeminiReply>> _send(
+    String method,
+    Uri uri,
+    String apiKey,
+    Map<String, Object?>? body,
+  ) async {
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 10);
     try {
-      final request = await client.postUrl(
-        Uri.parse('$baseUrl/models/$model:generateContent'),
-      );
-      request.headers
-        ..contentType = ContentType.json
-        ..set('x-goog-api-key', apiKey);
-      request.write(jsonEncode(body));
+      final request = await client.openUrl(method, uri);
+      request.headers.set('x-goog-api-key', apiKey);
+      if (body != null) {
+        request.headers.contentType = ContentType.json;
+        request.write(jsonEncode(body));
+      }
       final response = await request.close().timeout(timeout);
       final text = await response
           .transform(utf8.decoder)

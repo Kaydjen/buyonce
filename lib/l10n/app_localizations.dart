@@ -854,6 +854,54 @@ abstract class AppLocalizations {
   /// **'Gemini'**
   String get gemini;
 
+  /// No description provided for @models.
+  ///
+  /// In en, this message translates to:
+  /// **'Models'**
+  String get models;
+
+  /// No description provided for @otherModel.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get otherModel;
+
+  /// No description provided for @modelId.
+  ///
+  /// In en, this message translates to:
+  /// **'Model ID'**
+  String get modelId;
+
+  /// No description provided for @invalidModelId.
+  ///
+  /// In en, this message translates to:
+  /// **'That is not a model ID'**
+  String get invalidModelId;
+
+  /// No description provided for @modelAlreadyAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Already in the list'**
+  String get modelAlreadyAdded;
+
+  /// No description provided for @addApiKeyFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Add an API key first'**
+  String get addApiKeyFirst;
+
+  /// No description provided for @apiKeyRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'Google did not accept the API key'**
+  String get apiKeyRejected;
+
+  /// No description provided for @reset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get reset;
+
   /// No description provided for @apiKey.
   ///
   /// In en, this message translates to:

@@ -36,6 +36,8 @@ class SettingsService {
   Future<Result<void>> setString(String key, String value) =>
       _write((p) => p.setString(key, value));
 
+  Future<Result<void>> remove(String key) => _write((p) => p.remove(key));
+
   Future<Result<void>> _write(
     Future<bool> Function(SharedPreferences prefs) action,
   ) async {

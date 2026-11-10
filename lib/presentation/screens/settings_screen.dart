@@ -9,7 +9,9 @@ import '../../core/utils/result.dart';
 import '../../data/repositories/gemini_key_repository.dart';
 import '../../domain/models/app_settings.dart';
 import '../../l10n/l10n.dart';
+import '../../domain/models/gemini_task.dart';
 import '../view_models/settings/gemini_key_view_model.dart';
+import '../view_models/settings/gemini_models_view_model.dart';
 import '../view_models/settings/settings_view_model.dart';
 import '../view_models/settings/style_variant_view_model.dart';
 import '../widgets/account_section.dart';
@@ -22,6 +24,7 @@ import '../widgets/group_dialogs.dart';
 import '../widgets/segment_choice.dart';
 import '../widgets/soft_switch_tile.dart';
 import '../widgets/titled_card.dart';
+import 'models_screen.dart';
 import '../widgets/version_row.dart';
 
 /// "30 s", "5 min".
@@ -64,12 +67,16 @@ class _ValuePill extends StatelessWidget {
 class _GeminiRows extends StatelessWidget {
   const _GeminiRows({
     required this.apiKey,
+    required this.modelCount,
     required this.onEdit,
+    required this.onModels,
     required this.onClear,
   });
 
   final String? apiKey;
+  final int? modelCount;
   final VoidCallback onEdit;
+  final VoidCallback onModels;
   final VoidCallback onClear;
 
   @override
@@ -88,6 +95,17 @@ class _GeminiRows extends StatelessWidget {
             onPressed: onEdit,
           ),
           onTap: onEdit,
+        ),
+        ListTile(
+          key: const Key('modelsRow'),
+          contentPadding: EdgeInsets.zero,
+          title: Text(context.l10n.models),
+          trailing: _ValuePill(
+            label: '${modelCount ?? GeminiTask.items.defaultModels.length}',
+            enabled: true,
+            onPressed: onModels,
+          ),
+          onTap: onModels,
         ),
         if (key != null) ...[
           const Groove(),
@@ -239,7 +257,14 @@ class SettingsScreen extends ConsumerWidget {
                 padding: _inner,
                 child: _GeminiRows(
                   apiKey: ref.watch(geminiKeyProvider).value,
+                  modelCount: ref
+                      .watch(geminiModelsProvider(GeminiTask.items))
+                      .value
+                      ?.length,
                   onEdit: () => _editKey(context, ref),
+                  onModels: () => Navigator.of(context).push<void>(
+                    MaterialPageRoute(builder: (_) => const ModelsScreen()),
+                  ),
                   onClear: ref.read(geminiKeyProvider.notifier).clear,
                 ),
               ),

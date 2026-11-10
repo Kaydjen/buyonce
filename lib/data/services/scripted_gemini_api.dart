@@ -15,10 +15,42 @@ class GeminiCall {
 /// A Gemini API that answers from a script: tests and debug runs without a key or a
 /// network. [respond] gets every call and returns the reply (or a network failure).
 class ScriptedGeminiApi implements GeminiApi {
-  ScriptedGeminiApi(this.respond);
+  ScriptedGeminiApi(this.respond, {this.respondList});
 
   final Result<GeminiReply> Function(GeminiCall call) respond;
+
+  /// Answers `ListModels` by page token (null = the first page).
+  final Result<GeminiReply> Function(String? pageToken)? respondList;
   final calls = <GeminiCall>[];
+  final listCalls = <String?>[];
+
+  @override
+  Future<Result<GeminiReply>> listModels({
+    required String apiKey,
+    String? pageToken,
+  }) async {
+    listCalls.add(pageToken);
+    return respondList?.call(pageToken) ??
+        const Failure(GeminiNetworkError.failed);
+  }
+
+  /// A `ListModels` page: [models] are (name, displayName, methods) triples.
+  static Result<GeminiReply> modelPage(
+    List<(String, String, List<String>)> models, {
+    String? next,
+  }) => Ok(
+    GeminiReply(200, {
+      'models': [
+        for (final (name, display, methods) in models)
+          {
+            'name': 'models/$name',
+            'displayName': display,
+            'supportedGenerationMethods': methods,
+          },
+      ],
+      'nextPageToken': ?next,
+    }),
+  );
 
   @override
   Future<Result<GeminiReply>> generate({

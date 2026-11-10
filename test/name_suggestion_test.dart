@@ -7,6 +7,7 @@ import 'package:buyonce/data/services/gemini_api.dart';
 import 'package:buyonce/data/services/gemini_key_service.dart';
 import 'package:buyonce/data/services/scripted_gemini_api.dart';
 import 'package:buyonce/domain/models/gemini_outcome.dart';
+import 'package:buyonce/domain/models/gemini_task.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 final _photo = Uint8List.fromList([1, 2, 3]);

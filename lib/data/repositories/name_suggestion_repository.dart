@@ -27,14 +27,6 @@ final class NoSuggestions extends NameSuggestions {
   final GeminiOutcome outcome;
 }
 
-/// The models tried for a photo, best first (chosen by the test with real photos,
-/// notes in plan.md step 64.0). The user's own list replaces it in step 64.4.
-const defaultItemModels = [
-  'gemini-3.5-flash-lite',
-  'gemini-3.1-flash-lite',
-  'gemini-3.8-flash',
-];
-
 /// The task "name the item on this photo", on top of [GeminiClient].
 class NameSuggestionRepository {
   NameSuggestionRepository(this._client);

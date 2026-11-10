@@ -449,6 +449,30 @@ class AppLocalizationsUk extends AppLocalizations {
   String get gemini => 'Gemini';
 
   @override
+  String get models => 'Моделі';
+
+  @override
+  String get otherModel => 'Інша';
+
+  @override
+  String get modelId => 'ID моделі';
+
+  @override
+  String get invalidModelId => 'Це не ID моделі';
+
+  @override
+  String get modelAlreadyAdded => 'Вже є в списку';
+
+  @override
+  String get addApiKeyFirst => 'Спершу додайте ключ API';
+
+  @override
+  String get apiKeyRejected => 'Google не прийняв ключ API';
+
+  @override
+  String get reset => 'Скинути';
+
+  @override
   String get apiKey => 'Ключ API';
 
   @override
