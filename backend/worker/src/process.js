@@ -9,7 +9,7 @@
 // api.push({token, title, body, data}) -> 'ok' | 'unregistered'
 // api.newId() -> string
 
-import { LEASE_MS, askOps, boughtText, finalizeOps, neededText, recipientIds } from './logic.js';
+import { LEASE_MS, amountLabel, askOps, boughtText, finalizeOps, neededText, recipientIds } from './logic.js';
 
 export async function processTrip(api, tripDoc) {
   const groupPath = tripDoc.path.split('/trips/')[0];
@@ -45,7 +45,10 @@ export async function processTrip(api, tripDoc) {
     const profile = (await api.getDocs([`profiles/${claimed.fields.userId}`])).get(`profiles/${claimed.fields.userId}`);
     const text = boughtText(
       profile?.fields.displayName || 'Someone',
-      productIds.map((id) => byId.get(id).fields.name ?? ''),
+      productIds.map((id) => ({
+        name: byId.get(id).fields.name ?? '',
+        amount: amountLabel(claimed.fields.marks?.[id]),
+      })),
     );
     const users = await api.getDocs(recipients.map((u) => `users/${u}`));
     for (const uid of recipients) {

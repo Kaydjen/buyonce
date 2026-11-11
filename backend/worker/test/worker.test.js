@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { decodeDoc, decodeValue, encodeValue, opToWrite } from '../src/firestore.js';
-import { boughtText, finalizeOps, recipientIds } from '../src/logic.js';
+import { amountLabel, boughtText, finalizeOps, recipientIds } from '../src/logic.js';
 import { processAsk, processTrip } from '../src/process.js';
 import { handleAsk, handleSend } from '../src/index.js';
 
@@ -250,4 +250,20 @@ test('/ask: token, ids and membership are checked', async () => {
   assert.equal((await handleAsk(post(jwt('alice'), { groupId: 'g', productIds: ['../x'] }), {}, w.api, read)).status, 400);
   assert.equal((await handleAsk(post(jwt('alice'), ok), {}, w.api, async () => null)).status, 403);
   assert.equal((await handleAsk(post(jwt('alice'), ok), {}, w.api, read)).status, 200);
+});
+
+test('the push names the amounts: x2, 1.5 kg, both; bare marks and bad values add nothing', () => {
+  assert.equal(amountLabel({ at: new Date(), count: 2 }), 'x2');
+  assert.equal(amountLabel({ at: new Date(), g: 1500 }), '1.5 kg');
+  assert.equal(amountLabel({ at: new Date(), g: 500 }), '500 g');
+  assert.equal(amountLabel({ at: new Date(), count: 2, ml: 1500 }), 'x2 1.5 l');
+  assert.equal(amountLabel({ at: new Date(), ml: 250 }), '250 ml');
+  assert.equal(amountLabel(new Date()), '');
+  assert.equal(amountLabel(undefined), '');
+  assert.equal(amountLabel({ count: 1 }), '');
+  assert.equal(amountLabel({ count: 'x', g: -5, ml: 1.5 }), '');
+  assert.deepEqual(
+    boughtText('Anna', [{ name: 'Milk', amount: 'x2' }, { name: 'Tomatoes', amount: '1.5 kg' }, 'Bread']),
+    { title: 'Anna', body: 'Bought: Milk x2, Tomatoes 1.5 kg, Bread' },
+  );
 });

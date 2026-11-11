@@ -47,6 +47,13 @@ void main() {
     await closeEditor(tester);
 
     expect(rowAmount('Bread'), findsOneWidget);
+    // The amount does not make the row taller.
+    double height(String n) => tester
+        .getSize(
+          find.ancestor(of: rowNamed(n), matching: find.byType(ProductRow)),
+        )
+        .height;
+    expect(height('Bread'), closeTo(height('Eggs'), 1.5)); // a divider is 1 px
     expect(
       find.descendant(of: rowAmount('Bread'), matching: find.text('x2')),
       findsOneWidget,

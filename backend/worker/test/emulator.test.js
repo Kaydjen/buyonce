@@ -44,6 +44,7 @@ test('due trip is found by the collection-group query and sent once', async () =
   assert.equal(statuses.filter((s) => s === 'sent').length, 1);
   assert.equal(pushes.length, 1);
   assert.equal(pushes[0].token, 'tok-wk-bob');
+  assert.match(pushes[0].body, /Milk x2 1\.5 l/); // the mark's amount is in the text
 
   const p1 = (await read(`${G}/products/p1`)).fields;
   assert.equal(p1.planned, false);

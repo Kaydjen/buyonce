@@ -11,10 +11,31 @@ const SHOWN = 3;
 
 const cut = (n) => (n.length > 30 ? `${n.slice(0, 29)}…` : n);
 
+const whole = (v) => Number.isInteger(v) && v > 0;
+const size = (v, small, big) => (v < 1000 ? `${v} ${small}` : `${v / 1000} ${big}`);
+
+/// "x2 1.5 l" from a mark value: a bare time (no amount) or a map {at, count, g, ml}.
+/// Anything that is not a plain whole number is ignored (the rules cannot check it).
+export function amountLabel(mark) {
+  if (mark === null || typeof mark !== 'object' || mark instanceof Date) return '';
+  return [
+    whole(mark.count) && mark.count > 1 ? `x${mark.count}` : '',
+    whole(mark.g) ? size(mark.g, 'g', 'kg') : '',
+    whole(mark.ml) ? size(mark.ml, 'ml', 'l') : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+/// A name with its amount ("Milk x2"); the name is cut, the amount is short.
+const withAmount = (item) =>
+  typeof item === 'string' ? cut(item) : `${cut(item.name)}${item.amount ? ` ${item.amount}` : ''}`;
+
 /// The text is built here from the documents; the client only sends ids. Product names are
-/// the group's own, cut so one long name cannot fill the screen.
+/// the group's own, cut so one long name cannot fill the screen. Each item is a name or
+/// `{name, amount}` (amount from `amountLabel`).
 export function boughtText(senderName, productNames) {
-  const names = productNames.map(cut);
+  const names = productNames.map(withAmount);
   const shown = names.slice(0, SHOWN).join(', ');
   const more = names.length - SHOWN;
   return {
