@@ -517,4 +517,30 @@ class AppLocalizationsUk extends AppLocalizations {
 
   @override
   String get install => 'Встановити';
+
+  @override
+  String get amount => 'Кількість';
+
+  @override
+  String get amountMore => 'Більше';
+
+  @override
+  String get amountLess => 'Менше';
+
+  @override
+  String amountCount(int count) {
+    return 'x$count';
+  }
+
+  @override
+  String get unitKg => 'кг';
+
+  @override
+  String get unitG => 'г';
+
+  @override
+  String get unitL => 'л';
+
+  @override
+  String get unitMl => 'мл';
 }

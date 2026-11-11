@@ -19,7 +19,7 @@ async function seed() {
   await put(`${G}/members/wk-alice`, { muted: false });
   await put(`${G}/members/wk-bob`, { muted: false });
   await put(`${G}/members/wk-carl`, { muted: true });
-  await put(`${G}/products/p1`, { name: 'Milk', planned: true, plannedBy: 'wk-bob', plannedAt: new Date(), usage: 2 });
+  await put(`${G}/products/p1`, { name: 'Milk', planned: true, plannedBy: 'wk-bob', plannedAt: new Date(), usage: 2, need: { count: 2, ml: 1500 } });
   await put(`${G}/products/p2`, { name: 'Bread', planned: false, usage: 0 });
   await put('profiles/wk-alice', { displayName: 'Alice' });
   await put('users/wk-bob', { fcmToken: 'tok-wk-bob' });
@@ -28,7 +28,7 @@ async function seed() {
     open: false,
     sentAt: new Date(),
     autoSendAt: new Date(Date.now() - 1000),
-    marks: { p1: new Date(), p2: new Date() },
+    marks: { p1: { at: new Date(), count: 2, ml: 1500 }, p2: new Date() },
   });
 }
 
@@ -49,6 +49,7 @@ test('due trip is found by the collection-group query and sent once', async () =
   assert.equal(p1.planned, false);
   assert.equal(p1.plannedBy, undefined);
   assert.equal(p1.plannedAt, undefined);
+  assert.equal(p1.need, undefined); // sending clears the need with the plan
   assert.equal(p1.usage, 3);
   assert.equal(p1.name, 'Milk'); // the mask left the rest alone
   const p2 = (await read(`${G}/products/p2`)).fields;

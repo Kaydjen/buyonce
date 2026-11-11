@@ -4,6 +4,7 @@ import '../../core/utils/clip.dart';
 import '../../core/utils/new_id.dart';
 import '../../core/utils/result.dart';
 import '../../core/utils/result_x.dart';
+import '../../domain/models/amount.dart';
 import '../../domain/models/group.dart';
 import '../../domain/models/notice.dart';
 import '../../domain/models/plan.dart';
@@ -442,23 +443,41 @@ class ListRepository {
     return Ok(productIds.length);
   }
 
+  /// What each product needs now; a mark copies it.
+  Future<Result<Map<String, Amount>>> _needs() => _service
+      .getProducts(groupId)
+      .map((products) => {for (final p in products) p.id: p.need});
+
   /// Adds or removes the user's mark in the user's open trip; the first mark opens a trip.
+  /// A new mark carries the product's need.
   Future<Result<void>> toggleMark(String productId, String userId) =>
-      _service.getOpenTrips(groupId).andThen((trips) {
-        final open = trips.where((t) => t.userId == userId).firstOrNull;
-        final now = DateTime.now();
-        final trip =
-            open ??
-            Trip(id: newId(), groupId: groupId, userId: userId, startedAt: now);
-        final marked = trip.marks.any((m) => m.productId == productId);
-        final marks = marked
-            ? trip.marks.where((m) => m.productId != productId).toList()
-            : [
-                ...trip.marks,
-                TripMark(productId: productId, userId: userId, markedAt: now),
-              ];
-        return _saveTrip(open, trip.copyWith(marks: marks));
-      });
+      _needs().andThen(
+        (needs) => _service.getOpenTrips(groupId).andThen((trips) {
+          final open = trips.where((t) => t.userId == userId).firstOrNull;
+          final now = DateTime.now();
+          final trip =
+              open ??
+              Trip(
+                id: newId(),
+                groupId: groupId,
+                userId: userId,
+                startedAt: now,
+              );
+          final marked = trip.marks.any((m) => m.productId == productId);
+          final marks = marked
+              ? trip.marks.where((m) => m.productId != productId).toList()
+              : [
+                  ...trip.marks,
+                  TripMark(
+                    productId: productId,
+                    userId: userId,
+                    markedAt: now,
+                    amount: needs[productId] ?? Amount.none,
+                  ),
+                ];
+          return _saveTrip(open, trip.copyWith(marks: marks));
+        }),
+      );
 
   /// Adds the user's marks for [productIds] (those already marked stay as they are)
   /// or removes them, in one write; the first mark opens a trip.
@@ -466,26 +485,67 @@ class ListRepository {
     List<String> productIds,
     String userId, {
     required bool marked,
-  }) => _service.getOpenTrips(groupId).andThen((trips) {
+  }) => _needs().andThen(
+    (needs) => _service.getOpenTrips(groupId).andThen((trips) {
+      final open = trips.where((t) => t.userId == userId).firstOrNull;
+      // An Undo that comes after the trip was sent has nothing to take back.
+      if (!marked && open == null) return Future.value(const Ok<void>(null));
+      final now = DateTime.now();
+      final trip =
+          open ??
+          Trip(id: newId(), groupId: groupId, userId: userId, startedAt: now);
+      final ids = productIds.toSet();
+      final kept = trip.marks.where((m) => !ids.contains(m.productId)).toList();
+      final had = trip.marks.where((m) => ids.contains(m.productId)).toList();
+      final marks = marked
+          ? [
+              ...trip.marks,
+              for (final id in ids)
+                if (!had.any((m) => m.productId == id))
+                  TripMark(
+                    productId: id,
+                    userId: userId,
+                    markedAt: now,
+                    amount: needs[id] ?? Amount.none,
+                  ),
+            ]
+          : kept;
+      return _saveTrip(open, trip.copyWith(marks: marks));
+    }),
+  );
+
+  /// Sets how much of [product] is wanted. A product I have marked changes its mark in
+  /// my open trip; any other product gets the amount as its need (and becomes needed,
+  /// planned by [userId], when it was not: an amount is a wish to buy it).
+  Future<Result<void>> setAmount(
+    Product product,
+    String userId,
+    Amount amount,
+  ) => _service.getOpenTrips(groupId).andThen((trips) {
     final open = trips.where((t) => t.userId == userId).firstOrNull;
-    // An Undo that comes after the trip was sent has nothing to take back.
-    if (!marked && open == null) return Future.value(const Ok<void>(null));
-    final now = DateTime.now();
-    final trip =
-        open ??
-        Trip(id: newId(), groupId: groupId, userId: userId, startedAt: now);
-    final ids = productIds.toSet();
-    final kept = trip.marks.where((m) => !ids.contains(m.productId)).toList();
-    final had = trip.marks.where((m) => ids.contains(m.productId)).toList();
-    final marks = marked
-        ? [
-            ...trip.marks,
-            for (final id in ids)
-              if (!had.any((m) => m.productId == id))
-                TripMark(productId: id, userId: userId, markedAt: now),
-          ]
-        : kept;
-    return _saveTrip(open, trip.copyWith(marks: marks));
+    final mark = open?.marks
+        .where((m) => m.productId == product.id)
+        .firstOrNull;
+    if (open != null && mark != null) {
+      return _service.updateTripMarks(
+        open.copyWith(
+          marks: [
+            for (final m in open.marks)
+              m.productId == product.id ? m.copyWith(amount: amount) : m,
+          ],
+        ),
+      );
+    }
+    return _service.updateProduct(
+      product.planned
+          ? product.copyWith(need: amount)
+          : product.copyWith(
+              planned: true,
+              plannedBy: userId,
+              plannedAt: DateTime.now(),
+              need: amount,
+            ),
+    );
   });
 
   /// Tells the server when to send the user's open trip if the phone cannot (null:

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_tokens.dart';
+import '../../domain/models/amount.dart';
 import '../view_models/list/list_state.dart';
+import 'amount_text.dart';
 
 class ProductRow extends StatelessWidget {
   const ProductRow({
@@ -17,6 +19,8 @@ class ProductRow extends StatelessWidget {
     this.onLongPress,
     this.menuLink,
     this.handle,
+    this.amount = Amount.none,
+    this.onAmountTap,
   });
 
   final String name;
@@ -51,6 +55,12 @@ class ProductRow extends StatelessWidget {
   /// Set while the menu is open and the row can be reordered: the row slides to the
   /// right and shows it at the left (the drag handle; a drag starts from it only).
   final Widget? handle;
+
+  /// How much of the product: "x2" and/or "1.5 kg" at the right of the name, nothing for
+  /// [Amount.none]. A tap on it ([onAmountTap]) opens the editor; without a callback
+  /// (a partner's mark) it is shown under the name instead and cannot be changed.
+  final Amount amount;
+  final VoidCallback? onAmountTap;
 
   /// How far the row moves to make room for the handle.
   static const handleSlot = 40.0;
@@ -96,6 +106,15 @@ class ProductRow extends StatelessWidget {
                         : t.text,
                   ),
                 ),
+                if (!amount.isNone && onAmountTap == null)
+                  Text(
+                    amountText(context, amount),
+                    key: const Key('amountUnder'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall!
+                        .copyWith(color: t.muted),
+                  ),
                 if (addedBy.isNotEmpty)
                   Text(
                     addedBy,
@@ -109,6 +128,11 @@ class ProductRow extends StatelessWidget {
               ],
             ),
           ),
+          if (!amount.isNone && onAmountTap != null)
+            _AmountButton(
+              text: amountText(context, amount),
+              onTap: onAmountTap!,
+            ),
           if (mark == RowMark.mine)
             Icon(Icons.check, size: 20, color: context.tokens.text)
           else if (mark == RowMark.partner)
@@ -236,4 +260,37 @@ class ProductRow extends StatelessWidget {
         ),
     ],
   );
+}
+
+/// The amount at the right of a row: one tap area for the count and the size.
+class _AmountButton extends StatelessWidget {
+  const _AmountButton({required this.text, required this.onTap});
+
+  final String text;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    return InkWell(
+      key: const Key('amountButton'),
+      borderRadius: BorderRadius.circular(t.radiusButton),
+      onTap: onTap,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Center(
+            widthFactor: 1,
+            child: Text(
+              text,
+              maxLines: 1,
+              style: Theme.of(context).textTheme.bodyMedium!
+                  .copyWith(color: t.muted),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

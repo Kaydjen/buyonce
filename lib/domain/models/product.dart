@@ -1,3 +1,5 @@
+import 'amount.dart';
+
 class Product {
   const Product({
     required this.id,
@@ -10,6 +12,7 @@ class Product {
     this.usage = 0,
     this.deleted = false,
     this.deletedAt,
+    this.need = Amount.none,
   });
 
   final String id;
@@ -40,6 +43,10 @@ class Product {
   /// When it was deleted; null while it is not.
   final DateTime? deletedAt;
 
+  /// How much is needed; it lives only while the product is planned (un-planning and
+  /// sending clear it). [Amount.none] shows nothing.
+  final Amount need;
+
   /// Planning sets [plannedBy] and [plannedAt] (when given), un-planning clears them.
   Product copyWith({
     String? name,
@@ -50,6 +57,7 @@ class Product {
     int? usage,
     bool? deleted,
     DateTime? deletedAt,
+    Amount? need,
   }) {
     final isPlanned = planned ?? this.planned;
     final isDeleted = deleted ?? this.deleted;
@@ -64,6 +72,7 @@ class Product {
       usage: usage ?? this.usage,
       deleted: isDeleted,
       deletedAt: isDeleted ? deletedAt ?? this.deletedAt : null,
+      need: isPlanned ? need ?? this.need : Amount.none,
     );
   }
 }

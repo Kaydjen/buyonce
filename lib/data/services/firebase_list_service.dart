@@ -4,11 +4,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../core/utils/result.dart';
+import '../../domain/models/amount.dart';
 import '../../domain/models/notice.dart';
 import '../../domain/models/plan.dart';
 import '../../domain/models/product.dart';
 import '../../domain/models/trip.dart';
 import '../../domain/models/trip_mark.dart';
+import 'amount_codec.dart';
 import 'list_service.dart';
 import 'send_worker.dart';
 
@@ -39,6 +41,7 @@ Product productFromData(String groupId, String id, Doc data) => Product(
   deletedAt: data['deleted'] == true && data['deletedAt'] != null
       ? _time(data['deletedAt'])
       : null,
+  need: data['planned'] == true ? amountFromData(data['need']) : Amount.none,
 );
 
 Trip tripFromData(String groupId, String id, Doc data) {
@@ -54,7 +57,9 @@ Trip tripFromData(String groupId, String id, Doc data) {
         TripMark(
           productId: e.key as String,
           userId: userId,
-          markedAt: _time(e.value),
+          // An old mark is the bare time; one with an amount is a map {at, count, g, ml}.
+          markedAt: _time(e.value is Map ? (e.value as Map)['at'] : e.value),
+          amount: amountFromData(e.value),
         ),
     ]..sort((a, b) => a.markedAt.compareTo(b.markedAt)),
     sentAt: data['sentAt'] == null ? null : _time(data['sentAt']),
@@ -62,9 +67,13 @@ Trip tripFromData(String groupId, String id, Doc data) {
   );
 }
 
-/// `marks.<productId>` = when the product was taken.
-Map<String, Timestamp> marksToData(List<TripMark> marks) => {
-  for (final m in marks) m.productId: Timestamp.fromDate(m.markedAt),
+/// `marks.<productId>` = when the product was taken: the bare time while no amount is
+/// set (so a phone with an older version still reads it), else a map `{at, count, g, ml}`.
+Map<String, Object> marksToData(List<TripMark> marks) => {
+  for (final m in marks)
+    m.productId: m.amount.isNone
+        ? Timestamp.fromDate(m.markedAt)
+        : {'at': Timestamp.fromDate(m.markedAt), ...amountToData(m.amount)},
 };
 
 Plan planFromData(String groupId, String id, Doc data) => Plan(
@@ -93,6 +102,7 @@ Map<String, Object?> productChange(
   Product p, {
   required bool wasPlanned,
   bool wasDeleted = false,
+  Amount wasNeed = Amount.none,
   required String me,
 }) => {
   'name': p.name,
@@ -114,6 +124,10 @@ Map<String, Object?> productChange(
     'deleted': FieldValue.delete(),
     'deletedAt': FieldValue.delete(),
   },
+  // The need lives only while the product is planned (the rules check it too); it is
+  // written only when it changes.
+  if (p.need != wasNeed)
+    'need': p.need.isNone ? FieldValue.delete() : amountToData(p.need),
 };
 
 /// Products, trips, plans and notices of the groups on Firestore, for the real
@@ -333,7 +347,7 @@ class FirebaseListService implements ListService {
 
   /// Which of the products are planned and which deleted now, by id, from the local
   /// data.
-  Future<Map<String, ({bool planned, bool deleted})>> _stateNow(
+  Future<Map<String, ({bool planned, bool deleted, Amount need})>> _stateNow(
     String groupId,
   ) async => {
     for (final d in (await _local(
@@ -343,6 +357,7 @@ class FirebaseListService implements ListService {
       d.id: (
         planned: d.data()['planned'] == true,
         deleted: d.data()['deleted'] == true,
+        need: amountFromData(d.data()['need']),
       ),
   };
 
@@ -364,6 +379,7 @@ class FirebaseListService implements ListService {
               p,
               wasPlanned: now[p.id]?.planned ?? false,
               wasDeleted: now[p.id]?.deleted ?? false,
+              wasNeed: now[p.id]?.need ?? Amount.none,
               me: _uid(),
             ),
           );
@@ -525,6 +541,7 @@ class FirebaseListService implements ListService {
               'planned': false,
               'plannedBy': FieldValue.delete(),
               'plannedAt': FieldValue.delete(),
+              'need': FieldValue.delete(),
             });
           }
         }

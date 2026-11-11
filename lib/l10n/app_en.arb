@@ -343,5 +343,20 @@
   "apiKey": "API key",
   "invalidApiKey": "That is not an API key",
   "download": "Download",
-  "install": "Install"
+  "install": "Install",
+  "amount": "Amount",
+  "amountMore": "More",
+  "amountLess": "Less",
+  "amountCount": "x{count}",
+  "@amountCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "unitKg": "kg",
+  "unitG": "g",
+  "unitL": "l",
+  "unitMl": "ml"
 }

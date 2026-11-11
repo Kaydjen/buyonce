@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/result.dart';
 import '../../../data/repositories/list_repository.dart';
+import '../../../domain/models/amount.dart';
 import '../../../domain/models/notice.dart';
 import '../../../domain/models/plan.dart';
 import '../../../domain/models/product.dart';
@@ -426,6 +427,12 @@ class ListViewModel extends AsyncNotifier<ListState> {
       await _apply((repo) => repo.renameProduct(product, check.name));
     }
     return null;
+  }
+
+  /// How much of [product] is wanted (see `ListRepository.setAmount`).
+  Future<void> setAmount(Product product, Amount amount) {
+    final userId = ref.read(currentUserIdProvider);
+    return _apply((repo) => repo.setAmount(product, userId, amount));
   }
 
   /// Takes [product] out of the lists (it goes to the archive); the user's own mark of

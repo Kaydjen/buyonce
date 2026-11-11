@@ -20,13 +20,18 @@ Finder get field => find.descendant(
 );
 
 void main() {
-  testWidgets('a long press shows the menu above the row and the drag handle', (
+  testWidgets('a long press shows the menu under the row and the drag handle', (
     tester,
   ) async {
     await pumpApp(tester);
     final x = tester.getTopLeft(find.text('Bread')).dx;
     await longPress(tester, 'Bread');
     expect(find.byKey(const Key('menuRename')), findsOneWidget);
+    // Under the row: above it the menu would cover the card title.
+    expect(
+      tester.getTopLeft(find.byKey(const Key('menuRename'))).dy,
+      greaterThan(tester.getBottomLeft(find.text('Bread')).dy),
+    );
     expect(find.byKey(const Key('menuDelete')), findsOneWidget);
     expect(handle, findsOneWidget);
     // The row slid to the right to make room for the handle.

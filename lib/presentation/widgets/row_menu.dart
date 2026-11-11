@@ -3,16 +3,18 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../l10n/l10n.dart';
 
-/// The small card that floats above a product row after a long press: rename and delete,
-/// two icons (each has a label for screen readers and a tooltip).
+/// The small card that floats above a product row after a long press: rename, amount and delete,
+/// three icons (each has a label for screen readers and a tooltip).
 class RowMenuCard extends StatelessWidget {
   const RowMenuCard({
     super.key,
     required this.onRename,
+    required this.onAmount,
     required this.onDelete,
   });
 
   final VoidCallback onRename;
+  final VoidCallback onAmount;
   final VoidCallback onDelete;
 
   @override
@@ -39,6 +41,12 @@ class RowMenuCard extends StatelessWidget {
                 tooltip: context.l10n.rename,
                 icon: Icon(Icons.edit_outlined, color: t.text),
                 onPressed: onRename,
+              ),
+              IconButton(
+                key: const Key('menuAmount'),
+                tooltip: context.l10n.amount,
+                icon: Icon(Icons.scale_outlined, color: t.text),
+                onPressed: onAmount,
               ),
               IconButton(
                 key: const Key('menuDelete'),

@@ -985,6 +985,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Install'**
   String get install;
+
+  /// No description provided for @amount.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount'**
+  String get amount;
+
+  /// No description provided for @amountMore.
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get amountMore;
+
+  /// No description provided for @amountLess.
+  ///
+  /// In en, this message translates to:
+  /// **'Less'**
+  String get amountLess;
+
+  /// No description provided for @amountCount.
+  ///
+  /// In en, this message translates to:
+  /// **'x{count}'**
+  String amountCount(int count);
+
+  /// No description provided for @unitKg.
+  ///
+  /// In en, this message translates to:
+  /// **'kg'**
+  String get unitKg;
+
+  /// No description provided for @unitG.
+  ///
+  /// In en, this message translates to:
+  /// **'g'**
+  String get unitG;
+
+  /// No description provided for @unitL.
+  ///
+  /// In en, this message translates to:
+  /// **'l'**
+  String get unitL;
+
+  /// No description provided for @unitMl.
+  ///
+  /// In en, this message translates to:
+  /// **'ml'**
+  String get unitMl;
 }
 
 class _AppLocalizationsDelegate

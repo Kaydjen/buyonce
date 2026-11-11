@@ -22,6 +22,7 @@ import '../view_models/list/sync_state.dart';
 import '../view_models/session/session.dart';
 import '../view_models/update/update_view_model.dart';
 import '../view_models/users/user_names_view_model.dart';
+import '../widgets/amount_editor.dart';
 import '../widgets/accent_dot.dart';
 import '../widgets/card_action.dart';
 import '../widgets/card_menu.dart';
@@ -1187,8 +1188,11 @@ class _ListScreenState extends ConsumerState<ListScreen>
     Haptics.tick(context);
     _closeMenu();
     final box = rowContext.findRenderObject() as RenderBox;
-    final top = box.localToGlobal(Offset.zero).dy;
-    final above = top > MediaQuery.paddingOf(context).top + 96;
+    final bottom = box.localToGlobal(Offset(0, box.size.height)).dy;
+    final screen = MediaQuery.sizeOf(context).height;
+    // Below the row by default: above it the menu would cover the card's title and
+    // its search icon. Above only when there is no room under the row.
+    final above = bottom + 96 + 120 > screen;
     setState(() => _menuId = p.id);
     _menuEntry = OverlayEntry(
       builder: (_) => Positioned(
@@ -1205,6 +1209,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
             onTapOutside: (_) => _closeMenu(),
             child: RowMenuCard(
               onRename: () => _renameProduct(p),
+              onAmount: () => _editAmount(p),
               onDelete: () => _deleteProduct(p),
             ),
           ),
@@ -1238,6 +1243,23 @@ class _ListScreenState extends ConsumerState<ListScreen>
           NameProblem.empty => l10n.enterName,
         },
       ),
+    );
+  }
+
+  /// The amount editor; closing it saves what it shows. [p] may be stale by then, so
+  /// the product is taken from the state again.
+  Future<void> _editAmount(Product p) async {
+    _closeMenu();
+    final vm = ref.read(listViewModelProvider.notifier);
+    final s = ref.read(listViewModelProvider).requireValue;
+    final initial = s.amountOf(p);
+    await showAmountEditor(
+      context,
+      name: p.name,
+      initial: initial,
+      onDone: (amount) {
+        if (amount != initial) vm.setAmount(p, amount);
+      },
     );
   }
 
@@ -1371,6 +1393,8 @@ class _ListScreenState extends ConsumerState<ListScreen>
             addedBy: addedBy,
             minHeight: plan ? 56 : 64,
             showDivider: divider,
+            amount: s.amountOf(p),
+            onAmountTap: mark == RowMark.partner ? null : () => _editAmount(p),
             onLongPress: () => _openRowMenu(p, rowContext),
             menuLink: _menuId == p.id ? _menuLink : null,
             handle: _menuId == p.id && reorderIndex != null

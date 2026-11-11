@@ -42,7 +42,7 @@ export function finalizeOps({ trip, groupPath, products, recipients, now, notice
     ops.push({
       path: `${groupPath}/products/${id}`,
       ...(p.fields.planned === true
-        ? { set: { planned: false }, remove: ['plannedBy', 'plannedAt'] }
+        ? { set: { planned: false }, remove: ['plannedBy', 'plannedAt', 'need'] }
         : {}),
       increment: { usage: 1 },
       must: { exists: true },

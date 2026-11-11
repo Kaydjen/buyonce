@@ -1,3 +1,4 @@
+import 'package:buyonce/domain/models/amount.dart';
 import 'package:buyonce/data/services/firebase_list_service.dart';
 import 'package:buyonce/domain/models/notice.dart';
 import 'package:buyonce/domain/models/product.dart';
@@ -75,7 +76,73 @@ void main() {
       TripMark(productId: 'a', userId: 'bob', markedAt: t0),
     ]);
     expect(data.keys, ['a']);
-    expect(data['a']!.toDate().isAtSameMomentAs(t0), isTrue);
+    expect((data['a']! as Timestamp).toDate().isAtSameMomentAs(t0), isTrue);
+  });
+
+  test(
+    'a mark with an amount is a map and reads back; the bare time still reads',
+    () {
+      final data = marksToData([
+        TripMark(
+          productId: 'a',
+          userId: 'bob',
+          markedAt: t0,
+          amount: const Amount(count: 2, millilitres: 1500),
+        ),
+        TripMark(productId: 'b', userId: 'bob', markedAt: t0),
+      ]);
+      final map = data['a']! as Map;
+      expect(map['count'], 2);
+      expect(map['ml'], 1500);
+      expect(data['b'], isA<Timestamp>());
+      final trip = tripFromData('g', 't', {
+        'userId': 'bob',
+        'startedAt': Timestamp.fromDate(t0),
+        'marks': data,
+      });
+      final a = trip.marks.firstWhere((m) => m.productId == 'a');
+      expect(a.amount, const Amount(count: 2, millilitres: 1500));
+      expect(a.markedAt.isAtSameMomentAs(t0), isTrue);
+      expect(
+        trip.marks.firstWhere((m) => m.productId == 'b').amount,
+        Amount.none,
+      );
+    },
+  );
+
+  test('a product need is read while planned and written with the change', () {
+    final p = productFromData('g', 'p', {
+      'name': 'Milk',
+      'position': 1,
+      'planned': true,
+      'plannedBy': 'bob',
+      'plannedAt': Timestamp.fromDate(t0),
+      'need': {'count': 2, 'ml': 1500},
+    });
+    expect(p.need, const Amount(count: 2, millilitres: 1500));
+    // A need on an unplanned product is ignored.
+    expect(
+      productFromData('g', 'q', {
+        'name': 'x',
+        'position': 1,
+        'need': {'count': 2},
+      }).need,
+      Amount.none,
+    );
+    final change = productChange(p, wasPlanned: true, me: 'bob');
+    expect(change['need'], {'count': 2, 'ml': 1500});
+    // Unchanged: not written. Cleared: deleted.
+    expect(
+      productChange(p, wasPlanned: true, wasNeed: p.need, me: 'bob').keys,
+      isNot(contains('need')),
+    );
+    final cleared = productChange(
+      p.copyWith(need: Amount.none),
+      wasPlanned: true,
+      wasNeed: p.need,
+      me: 'bob',
+    );
+    expect(cleared['need'], isA<FieldValue>());
   });
 
   test('plan and notice documents', () {

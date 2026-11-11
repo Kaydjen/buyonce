@@ -1,4 +1,5 @@
 import '../../domain/models/plan.dart';
+import 'amount_codec.dart';
 import '../../domain/models/product.dart';
 import '../../domain/models/trip.dart';
 import '../../domain/models/trip_mark.dart';
@@ -55,6 +56,7 @@ class ListSnapshot {
     'plannedAt': _time(p.plannedAt),
     'usage': p.usage,
     if (p.deleted) ...{'deleted': true, 'deletedAt': _time(p.deletedAt)},
+    if (!p.need.isNone) 'need': amountToData(p.need),
   };
 
   static Product _parseProduct(Map m) => Product(
@@ -68,6 +70,7 @@ class ListSnapshot {
     usage: m['usage'] as int,
     deleted: m['deleted'] == true,
     deletedAt: _parseTime(m['deletedAt']),
+    need: amountFromData(m['need']),
   );
 
   static Map<String, Object?> _plan(Plan p) => {
@@ -99,6 +102,7 @@ class ListSnapshot {
           'productId': m.productId,
           'userId': m.userId,
           'markedAt': _time(m.markedAt),
+          if (!m.amount.isNone) 'amount': amountToData(m.amount),
         },
     ],
   };
@@ -116,6 +120,7 @@ class ListSnapshot {
           productId: (x as Map)['productId'] as String,
           userId: x['userId'] as String,
           markedAt: _parseTime(x['markedAt'])!,
+          amount: amountFromData(x['amount']),
         ),
     ],
   );

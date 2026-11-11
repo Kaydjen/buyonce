@@ -43,6 +43,18 @@ service cloud.firestore {
       return data.get(key, null) == null;
     }
 
+    // `need` of a product (how much is wanted): only while planned, a map of whole
+    // numbers in range: count 1..99, g and ml 1..99999.
+    function needOk(d) {
+      return unset(d, 'need')
+        || (d.planned == true
+          && d.need is map
+          && d.need.keys().hasOnly(['count', 'g', 'ml'])
+          && (!('count' in d.need) || (d.need.count is int && d.need.count >= 1 && d.need.count <= 99))
+          && (!('g' in d.need) || (d.need.g is int && d.need.g >= 1 && d.need.g <= 99999))
+          && (!('ml' in d.need) || (d.need.ml is int && d.need.ml >= 1 && d.need.ml <= 99999)));
+    }
+
     // users/{uid}: private (the push token); only the owner reads and writes.
     match /users/{uid} {
       allow read, delete: if signedIn() && me() == uid;
@@ -168,7 +180,8 @@ service cloud.firestore {
 
         // `usage` is not in the list: only the Worker changes it.
         allow update: if isMember(gid)
-          && changed().hasOnly(['name', 'position', 'planned', 'plannedBy', 'plannedAt', 'deleted', 'deletedAt'])
+          && changed().hasOnly(['name', 'position', 'planned', 'plannedBy', 'plannedAt', 'deleted', 'deletedAt', 'need'])
+          && needOk(request.resource.data)
           && text(request.resource.data.name, 100)
           && request.resource.data.position is number
           && (request.resource.data.planned == true
@@ -191,7 +204,8 @@ service cloud.firestore {
       }
 
       // One document per trip of one user: only that user writes it, and only while open.
-      // `marks.<productId>` = when the product was taken. `open` is true until the trip is
+      // `marks.<productId>` = when the product was taken (a time), or a map {at, count, g, ml}
+      // with an amount (the rules cannot look inside the map values). `open` is true until the trip is
       // sent (a query cannot ask for a missing `sentAt`, it can ask for `open == true`).
       match /trips/{tid} {
         allow read: if isMember(gid);

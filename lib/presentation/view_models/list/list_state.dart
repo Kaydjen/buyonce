@@ -1,3 +1,4 @@
+import '../../../domain/models/amount.dart';
 import '../../../domain/models/notice.dart';
 import '../../../domain/models/plan.dart';
 import '../../../domain/models/product.dart';
@@ -120,6 +121,20 @@ class ListState {
       if (t.userId != userId)
         for (final m in t.marks) m.productId,
   };
+
+  /// How much of [p] the row shows: the amount of my mark, else of the partner's mark,
+  /// else what is needed.
+  Amount amountOf(Product p) {
+    for (final mine in [true, false]) {
+      for (final t in trips) {
+        if ((t.userId == userId) != mine) continue;
+        for (final m in t.marks) {
+          if (m.productId == p.id) return m.amount;
+        }
+      }
+    }
+    return p.need;
+  }
 
   RowMark markOf(String productId) {
     if (myMarkIds.contains(productId)) return RowMark.mine;

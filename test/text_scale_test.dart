@@ -1,3 +1,6 @@
+import 'package:buyonce/core/utils/result.dart';
+import 'package:buyonce/domain/models/amount.dart';
+import 'package:buyonce/domain/models/product.dart';
 import 'package:buyonce/data/services/in_memory_group_service.dart';
 import 'package:buyonce/data/services/in_memory_list_service.dart';
 import 'package:buyonce/data/services/service_providers.dart';
@@ -227,6 +230,31 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('newGroup')), findsOneWidget);
       expectNoOverflow(tester, 'Plan with New');
+    });
+
+    testWidgets('amounts and their editor hold at ${scale.name}', (
+      tester,
+    ) async {
+      await pumpAt(tester, scale);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(MaterialApp)),
+      );
+      final repo = container.read(listRepositoryProvider);
+      final products = (await repo.getProducts() as Ok<List<Product>>).value;
+      final p = products.firstWhere((p) => p.id == 'seed4');
+      await repo.setAmount(
+        p,
+        'me',
+        const Amount(count: 99, millilitres: 99900),
+      );
+      await container.read(listViewModelProvider.notifier).refresh();
+      await tester.tap(find.byKey(const Key('tabShop')));
+      await tester.pumpAndSettle();
+      expectNoOverflow(tester, 'row with an amount');
+      await tester.tap(find.byKey(const Key('amountButton')).first);
+      await tester.pumpAndSettle();
+      expectNoOverflow(tester, 'amount editor');
+      await closeTop(tester);
     });
 
     testWidgets('Ask and its notice hold at ${scale.name}', (tester) async {

@@ -515,4 +515,30 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get install => 'Install';
+
+  @override
+  String get amount => 'Amount';
+
+  @override
+  String get amountMore => 'More';
+
+  @override
+  String get amountLess => 'Less';
+
+  @override
+  String amountCount(int count) {
+    return 'x$count';
+  }
+
+  @override
+  String get unitKg => 'kg';
+
+  @override
+  String get unitG => 'g';
+
+  @override
+  String get unitL => 'l';
+
+  @override
+  String get unitMl => 'ml';
 }

@@ -449,6 +449,59 @@ describe('products', () => {
     await assertFails(updateDoc(doc(db, 'groups/g1/products/milk'), { name: '' }));
   });
 
+  // The amount wanted (step 66): `need`, only while planned, whole numbers in range.
+  describe('the need', () => {
+    const plan = { planned: true, plannedBy: 'bob', plannedAt: serverTimestamp() };
+
+    it('is set with or after planning, changed, and cleared with un-planning', async () => {
+      const db = as('bob');
+      await assertSucceeds(updateDoc(doc(db, 'groups/g1/products/milk'), {
+        ...plan, need: { count: 2, ml: 1500 },
+      }));
+      await assertSucceeds(updateDoc(doc(db, 'groups/g1/products/milk'), { need: { count: 3 } }));
+      await assertSucceeds(updateDoc(doc(db, 'groups/g1/products/milk'), { need: deleteField() }));
+      await assertSucceeds(updateDoc(doc(db, 'groups/g1/products/milk'), { need: { g: 500 } }));
+      await assertSucceeds(updateDoc(doc(db, 'groups/g1/products/milk'), {
+        planned: false, plannedBy: deleteField(), plannedAt: deleteField(), need: deleteField(),
+      }));
+    });
+
+    it('the exact write of the app on an already planned product', async () => {
+      const db = as('bob');
+      await assertSucceeds(updateDoc(doc(db, 'groups/g1/products/milk'), plan));
+      await assertSucceeds(updateDoc(doc(db, 'groups/g1/products/milk'), {
+        name: 'Milk', position: 1, planned: true, need: { count: 2, ml: 500 },
+      }));
+    });
+
+    it('is refused on a product that is not planned', async () => {
+      const db = as('bob');
+      await assertFails(updateDoc(doc(db, 'groups/g1/products/milk'), { need: { count: 2 } }));
+    });
+
+    it('is refused when un-planning leaves it behind', async () => {
+      const db = as('bob');
+      await assertSucceeds(updateDoc(doc(db, 'groups/g1/products/milk'), { ...plan, need: { count: 2 } }));
+      await assertFails(updateDoc(doc(db, 'groups/g1/products/milk'), {
+        planned: false, plannedBy: deleteField(), plannedAt: deleteField(),
+      }));
+    });
+
+    it('must be a map of whole numbers in range with known keys', async () => {
+      const db = as('bob');
+      for (const need of [
+        { count: 0 }, { count: 100 }, { count: 1.5 }, { g: 0 }, { g: 100000 },
+        { ml: -1 }, { ml: 'x' }, { price: 3 }, 5, 'two', [1],
+      ]) {
+        await assertFails(updateDoc(doc(db, 'groups/g1/products/milk'), { ...plan, need }));
+      }
+    });
+
+    it('a stranger cannot set it', async () => {
+      await assertFails(updateDoc(doc(as('carol'), 'groups/g1/products/milk'), { ...plan, need: { count: 2 } }));
+    });
+  });
+
   // The archive: a deleted product keeps its document, with the flag and the server time.
   describe('the archive', () => {
     const del = (db, id = 'milk') => updateDoc(doc(db, `groups/g1/products/${id}`), {

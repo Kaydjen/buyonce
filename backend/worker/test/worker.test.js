@@ -18,7 +18,7 @@ test('opToWrite: mask, deletes, transforms and preconditions', () => {
     {
       path: 'groups/g/products/p1',
       set: { planned: false },
-      remove: ['plannedBy', 'plannedAt'],
+      remove: ['plannedBy', 'plannedAt', 'need'],
       increment: { usage: 1 },
       serverTime: ['finalizedAt'],
       must: { updateTime: 'T' },
@@ -27,7 +27,7 @@ test('opToWrite: mask, deletes, transforms and preconditions', () => {
   );
   assert.equal(w.update.name, `${BASE}/groups/g/products/p1`);
   assert.deepEqual(w.update.fields, { planned: { booleanValue: false } });
-  assert.deepEqual(w.updateMask.fieldPaths, ['planned', 'plannedBy', 'plannedAt']);
+  assert.deepEqual(w.updateMask.fieldPaths, ['planned', 'plannedBy', 'plannedAt', 'need']);
   assert.deepEqual(w.updateTransforms, [
     { fieldPath: 'usage', increment: { integerValue: '1' } },
     { fieldPath: 'finalizedAt', setToServerValue: 'REQUEST_TIME' },
@@ -110,7 +110,7 @@ test('send: finalize once, one notice and one push for the other unmuted member'
   assert.deepEqual(finalize[0].set, { open: false });
   assert.deepEqual(finalize[0].serverTime, ['finalizedAt']); // sentAt already set by the client
   const p1 = finalize.find((o) => o.path.endsWith('products/p1'));
-  assert.deepEqual(p1.remove, ['plannedBy', 'plannedAt']);
+  assert.deepEqual(p1.remove, ['plannedBy', 'plannedAt', 'need']);
   assert.deepEqual(p1.increment, { usage: 1 });
   const p2 = finalize.find((o) => o.path.endsWith('products/p2'));
   assert.equal(p2.set, undefined); // not planned: only the counter moves

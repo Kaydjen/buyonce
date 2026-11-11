@@ -149,5 +149,13 @@
   "apiKey": "Ключ API",
   "invalidApiKey": "Це не схоже на ключ API",
   "download": "Завантажити",
-  "install": "Встановити"
+  "install": "Встановити",
+  "amount": "Кількість",
+  "amountMore": "Більше",
+  "amountLess": "Менше",
+  "amountCount": "x{count}",
+  "unitKg": "кг",
+  "unitG": "г",
+  "unitL": "л",
+  "unitMl": "мл"
 }
