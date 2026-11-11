@@ -66,6 +66,9 @@ Trip tripFromData(String groupId, String id, Doc data) {
           discount: e.value is Map
               ? moneyFromData((e.value as Map)['discount'])
               : null,
+          receiptText: e.value is Map && (e.value as Map)['raw'] is String
+              ? (e.value as Map)['raw'] as String
+              : null,
         ),
     ]..sort((a, b) => a.markedAt.compareTo(b.markedAt)),
     sentAt: data['sentAt'] == null ? null : _time(data['sentAt']),
@@ -103,13 +106,18 @@ List<Map<String, Object>> receiptsToData(List<Receipt> receipts) => [
 /// `{at, count, g, ml, price, discount}` with only the known parts.
 Map<String, Object> marksToData(List<TripMark> marks) => {
   for (final m in marks)
-    m.productId: m.amount.isNone && m.price == null && m.discount == null
+    m.productId:
+        m.amount.isNone &&
+            m.price == null &&
+            m.discount == null &&
+            m.receiptText == null
         ? Timestamp.fromDate(m.markedAt)
         : {
             'at': Timestamp.fromDate(m.markedAt),
             ...amountToData(m.amount),
             if (m.price != null) 'price': moneyToData(m.price!),
             if (m.discount != null) 'discount': moneyToData(m.discount!),
+            if (m.receiptText != null) 'raw': m.receiptText!,
           },
 };
 

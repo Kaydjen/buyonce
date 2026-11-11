@@ -14,6 +14,8 @@ import 'package:buyonce/presentation/view_models/receipt/receipt_scan_view_model
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'receipt_fixtures.dart';
+
 final _jpeg = Uint8List.fromList([1, 2, 3]);
 
 const _answer = {
@@ -45,7 +47,7 @@ Future<(ProviderContainer, ScriptedPhotoService, ScriptedGeminiApi)> _rig({
     error: photoError,
   );
   final api = ScriptedGeminiApi(
-    (c) => ScriptedGeminiApi.text(jsonEncode(script?.call(c) ?? _answer)),
+    (c) => receiptReply(c, jsonEncode(script?.call(c) ?? _answer)),
   );
   final container = ProviderContainer(
     overrides: [
@@ -78,10 +80,10 @@ void main() {
     await _read(c);
     final scan = c.read(receiptScanProvider);
     expect(scan.reviewReady, isTrue);
-    expect(scan.photos, 0); // dropped once the review is open
+    expect(scan.photos, 3); // kept in memory for the review to show
     expect(scan.problem, isNull);
     final parts =
-        ((api.calls.single.body['contents'] as List).single as Map)['parts']
+        ((api.calls.first.body['contents'] as List).single as Map)['parts']
             as List;
     expect(parts.length, 4); // prompt + 3 photos
     final review = c.read(receiptReviewProvider)!;
@@ -142,4 +144,36 @@ void main() {
     vm.reset();
     expect(c.read(receiptScanProvider).photos, 0);
   });
+
+  test(
+    'the model is told what is wanted now first, then what is bought most',
+    () {
+      const list = ListState(
+        products: [
+          Product(id: 'a', groupId: 'g', name: 'Rare', position: 1),
+          Product(id: 'b', groupId: 'g', name: 'Often', position: 2, usage: 9),
+          Product(
+            id: 'c',
+            groupId: 'g',
+            name: 'Wanted',
+            position: 3,
+            planned: true,
+          ),
+          Product(
+            id: 'd',
+            groupId: 'g',
+            name: 'Sometimes',
+            position: 4,
+            usage: 3,
+          ),
+        ],
+      );
+      expect(ReceiptScanViewModel.namesByImportance(list), [
+        'Wanted',
+        'Often',
+        'Sometimes',
+        'Rare',
+      ]);
+    },
+  );
 }

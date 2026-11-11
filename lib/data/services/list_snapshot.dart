@@ -107,6 +107,7 @@ class ListSnapshot {
           if (!m.amount.isNone) 'amount': amountToData(m.amount),
           if (m.price != null) 'price': moneyToData(m.price!),
           if (m.discount != null) 'discount': moneyToData(m.discount!),
+          if (m.receiptText != null) 'receiptText': m.receiptText,
         },
     ],
     if (t.receipts.isNotEmpty)
@@ -137,6 +138,9 @@ class ListSnapshot {
           amount: amountFromData(x['amount']),
           price: moneyFromData(x['price']),
           discount: moneyFromData(x['discount']),
+          receiptText: x['receiptText'] is String
+              ? x['receiptText'] as String
+              : null,
         ),
     ],
     receipts: [

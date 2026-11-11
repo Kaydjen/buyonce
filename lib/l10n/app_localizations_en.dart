@@ -501,26 +501,34 @@ class AppLocalizationsEn extends AppLocalizations {
   String get receiptTitle => 'Receipt';
 
   @override
-  String get receiptFound => 'Found';
-
-  @override
-  String receiptSkipped(int count) {
-    return 'Skipped: $count';
+  String receiptBoughtOf(int bought, int total) {
+    return 'Bought $bought of $total';
   }
 
   @override
-  String get selectAllNew => 'Select all';
+  String get receiptCheckTitle => 'Check these';
+
+  @override
+  String get receiptInTitle => 'On the receipt';
+
+  @override
+  String get receiptMissingTitle => 'Not on the receipt';
+
+  @override
+  String receiptMoreLines(int count) {
+    return '$count more receipt lines';
+  }
+
+  @override
+  String get receiptNoneOfThese => 'None of these';
+
+  @override
+  String get receiptViewTooltip => 'Receipt photo';
 
   @override
   String markCount(int count) {
-    return 'Mark $count';
+    return 'Check off $count';
   }
-
-  @override
-  String get pricesMayBeMisread => 'Prices may be misread';
-
-  @override
-  String get newProduct => 'New product';
 
   @override
   String get models => 'Models';

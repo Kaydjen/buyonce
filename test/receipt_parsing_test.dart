@@ -14,6 +14,8 @@ import 'package:buyonce/domain/models/money.dart';
 import 'package:buyonce/domain/models/receipt_reading.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'receipt_fixtures.dart';
+
 final _photo = Uint8List.fromList([1, 2, 3]);
 const _known = ['Milk', 'Bread', 'Ziemniaki'];
 
@@ -357,7 +359,7 @@ void main() {
   group('read', () {
     test('sends all photos, schema and models; returns the reading', () async {
       final (repo, api) = await _rig(
-        (_) => ScriptedGeminiApi.text(jsonEncode(_answer)),
+        (c) => receiptReply(c, jsonEncode(_answer)),
       );
       final out = await repo.read(
         [_photo, _photo],
@@ -369,7 +371,7 @@ void main() {
       expect(out, isA<ParsedReceipt>());
       expect((out as ParsedReceipt).reading.lines.length, 5);
       expect(out.model, defaultReceiptModels.first);
-      final call = api.calls.single;
+      final call = api.calls.first;
       expect(call.config!['responseSchema'], ReceiptParsingRepository.schema);
       final parts =
           ((call.body['contents'] as List).single as Map)['parts'] as List;

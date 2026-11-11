@@ -1249,6 +1249,7 @@ class _ListScreenState extends ConsumerState<ListScreen>
       MaterialPageRoute(builder: (_) => const ReceiptReviewScreen()),
     );
     ref.read(receiptReviewProvider.notifier).discard();
+    ref.read(receiptScanProvider.notifier).reset(); // the photos go with the review
     if (marked != null && marked > 0 && mounted) {
       showToast(
         context,

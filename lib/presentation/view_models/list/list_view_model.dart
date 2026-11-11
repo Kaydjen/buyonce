@@ -4,10 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/result.dart';
 import '../../../data/repositories/list_repository.dart';
+import '../../../data/repositories/receipt_alias_repository.dart';
 import '../../../domain/models/amount.dart';
 import '../../../domain/models/notice.dart';
 import '../../../domain/models/plan.dart';
 import '../../../domain/models/product.dart';
+import '../../../domain/models/receipt_matching.dart';
 import '../../../domain/models/receipt_review.dart';
 import '../../../domain/models/product_names.dart';
 import '../../../domain/models/sort_key.dart';
@@ -401,8 +403,39 @@ class ListViewModel extends AsyncNotifier<ListState> {
       if (result case Ok(:final value)) marked = value;
       return result;
     });
-    if (marked > 0) _restartIdleTimer(userId, hasMarks: true);
+    if (marked > 0) {
+      _restartIdleTimer(userId, hasMarks: true);
+      await _learnReceiptPairs(review);
+    }
     return marked;
+  }
+
+  /// What the user just decided is remembered: a ticked row's printed lines are its
+  /// product from now on; a row that was known and is now unticked is forgotten (the
+  /// pair was wrong, or the user does not want it).
+  Future<void> _learnReceiptPairs(ReceiptReview review) async {
+    final aliases = ref.read(receiptAliasRepositoryProvider);
+    final listId = ref.read(activeGroupIdProvider);
+    if (listId == null) return;
+    final learn = <String, String>{};
+    final forget = <String>[];
+    for (final row in review.rows) {
+      final product = row.product;
+      if (product == null || row.locked) continue;
+      final keys = [
+        for (final raw in row.raws)
+          if (printedKey(raw).isNotEmpty) printedKey(raw),
+      ];
+      if (row.checked) {
+        for (final key in keys) {
+          learn[key] = product.id;
+        }
+      } else if (row.fromAlias) {
+        forget.addAll(keys);
+      }
+    }
+    await aliases.learn(listId, learn);
+    await aliases.forget(listId, forget);
   }
 
   Future<void> undoMarkAll(List<String> ids) async {

@@ -10,6 +10,7 @@ class TripMark {
     this.amount = Amount.none,
     this.price,
     this.discount,
+    this.receiptText,
   });
 
   final String productId;
@@ -27,10 +28,16 @@ class TripMark {
   /// discount is `price + discount`.
   final Money? discount;
 
+  /// The printed receipt line(s) this mark came from, when a scanned receipt made it:
+  /// the trace that lets a wrong tick be found later ("Картошка <- Podu ku Mega"). Null
+  /// for a mark made by a tap.
+  final String? receiptText;
+
   TripMark copyWith({
     Amount? amount,
     Money? price,
     Money? discount,
+    String? receiptText,
     bool clearPrice = false,
     bool clearDiscount = false,
   }) => TripMark(
@@ -40,5 +47,6 @@ class TripMark {
     amount: amount ?? this.amount,
     price: clearPrice ? null : price ?? this.price,
     discount: clearDiscount ? null : discount ?? this.discount,
+    receiptText: receiptText ?? this.receiptText,
   );
 }

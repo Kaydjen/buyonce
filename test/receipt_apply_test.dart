@@ -161,6 +161,7 @@ void main() {
     final trip = (await openTrips()).single;
     expect(trip.marks.single.amount, const Amount(count: 3));
     expect(trip.marks.single.price, const Money(700, 'PLN'));
+    expect(trip.marks.single.receiptText, 'MLEKO');
     expect(trip.receipts.map((x) => x.store), ['Older', 'Auchan']);
   });
 

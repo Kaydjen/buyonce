@@ -279,6 +279,13 @@ void main() {
                   match: 'Milk',
                   amount: Amount(count: 99, millilitres: 99900),
                 ),
+                const ReceiptLine(
+                  raw: 'PODU KU MEGA P KG C 1,620 X13,99 22,65C',
+                  kind: ReceiptLineKind.item,
+                  match: 'Bread',
+                  tier: MatchTier.check,
+                  meaning: 'a long reading of the printed words goes here too',
+                ),
                 ReceiptLine(
                   raw: 'KOMIN',
                   kind: ReceiptLineKind.item,
@@ -296,8 +303,14 @@ void main() {
             ),
           );
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('foundCard')), findsOneWidget);
+      expect(find.byKey(const Key('inCard')), findsOneWidget);
+      expect(find.byKey(const Key('checkCard')), findsOneWidget);
+      expect(find.byKey(const Key('missingCard')), findsOneWidget);
       expectNoOverflow(tester, 'receipt review');
+      await tester.scrollUntilVisible(find.byKey(const Key('moreLines')), 200);
+      await tester.tap(find.byKey(const Key('moreLines')));
+      await tester.pumpAndSettle();
+      expectNoOverflow(tester, 'receipt review with the spare lines');
     });
 
     testWidgets('Ask and its notice hold at ${scale.name}', (tester) async {

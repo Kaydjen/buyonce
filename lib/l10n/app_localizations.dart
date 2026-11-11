@@ -950,41 +950,53 @@ abstract class AppLocalizations {
   /// **'Receipt'**
   String get receiptTitle;
 
-  /// No description provided for @receiptFound.
+  /// No description provided for @receiptBoughtOf.
   ///
   /// In en, this message translates to:
-  /// **'Found'**
-  String get receiptFound;
+  /// **'Bought {bought} of {total}'**
+  String receiptBoughtOf(int bought, int total);
 
-  /// No description provided for @receiptSkipped.
+  /// No description provided for @receiptCheckTitle.
   ///
   /// In en, this message translates to:
-  /// **'Skipped: {count}'**
-  String receiptSkipped(int count);
+  /// **'Check these'**
+  String get receiptCheckTitle;
 
-  /// No description provided for @selectAllNew.
+  /// No description provided for @receiptInTitle.
   ///
   /// In en, this message translates to:
-  /// **'Select all'**
-  String get selectAllNew;
+  /// **'On the receipt'**
+  String get receiptInTitle;
+
+  /// No description provided for @receiptMissingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Not on the receipt'**
+  String get receiptMissingTitle;
+
+  /// No description provided for @receiptMoreLines.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} more receipt lines'**
+  String receiptMoreLines(int count);
+
+  /// No description provided for @receiptNoneOfThese.
+  ///
+  /// In en, this message translates to:
+  /// **'None of these'**
+  String get receiptNoneOfThese;
+
+  /// No description provided for @receiptViewTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt photo'**
+  String get receiptViewTooltip;
 
   /// No description provided for @markCount.
   ///
   /// In en, this message translates to:
-  /// **'Mark {count}'**
+  /// **'Check off {count}'**
   String markCount(int count);
-
-  /// No description provided for @pricesMayBeMisread.
-  ///
-  /// In en, this message translates to:
-  /// **'Prices may be misread'**
-  String get pricesMayBeMisread;
-
-  /// No description provided for @newProduct.
-  ///
-  /// In en, this message translates to:
-  /// **'New product'**
-  String get newProduct;
 
   /// No description provided for @models.
   ///

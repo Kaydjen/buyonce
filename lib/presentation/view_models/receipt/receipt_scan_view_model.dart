@@ -4,10 +4,13 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/result.dart';
+import '../../../data/repositories/receipt_alias_repository.dart';
 import '../../../data/repositories/receipt_parsing_repository.dart';
 import '../../../data/services/photo_service.dart';
 import '../../../domain/models/gemini_outcome.dart';
 import '../../../domain/models/gemini_task.dart';
+import '../groups/groups_view_model.dart';
+import '../list/list_state.dart';
 import '../list/list_view_model.dart';
 import '../settings/gemini_models_view_model.dart';
 import 'receipt_review_view_model.dart';
@@ -38,7 +41,7 @@ class ReceiptScanState {
 
 /// "Scan a receipt" in Shop: the camera (up to [ReceiptParsingRepository.maxPhotos]
 /// shots of one receipt), Gemini, then the review. The photos live in memory only and
-/// are dropped when the review opens or on [reset]; nothing is stored anywhere.
+/// are dropped on [reset] (when the review is closed); nothing is stored anywhere.
 class ReceiptScanViewModel extends Notifier<ReceiptScanState> {
   /// Long side of a receipt photo: small print needs more than an item photo.
   static const photoSide = 2048.0;
@@ -77,7 +80,8 @@ class ReceiptScanViewModel extends Notifier<ReceiptScanState> {
 
   /// Reads the photos taken so far and opens the review. [language] is the English name
   /// of the app language; [fallbackCurrency] an ISO code for a receipt that shows none.
-  /// On success the photos are dropped; on a problem they stay for a retry.
+  /// On success the review opens and the photos stay for it; on a problem they stay for
+  /// a retry.
   Future<void> read({
     required String language,
     required String fallbackCurrency,
@@ -89,22 +93,26 @@ class ReceiptScanViewModel extends Notifier<ReceiptScanState> {
     final models = await ref.read(
       geminiModelsProvider(GeminiTask.receipts).future,
     );
+    final aliases = await _aliasNames(list);
+    if (!ref.mounted) return;
     final result = await ref
         .read(receiptParsingRepositoryProvider)
         .read(
           List.of(_photos),
           language: language,
           models: models,
-          knownNames: [for (final p in list.products) p.name],
+          knownNames: namesByImportance(list),
           fallbackCurrency: fallbackCurrency,
+          aliases: aliases,
         );
     if (!ref.mounted) return;
     switch (result) {
       case ParsedReceipt(:final reading):
         final started = ref.read(receiptReviewProvider.notifier).begin(reading);
         if (started) {
-          _photos.clear();
-          state = const ReceiptScanState(reviewReady: true);
+          // The photos stay in memory while the review is open: they are what the
+          // user checks the matches against. `reset` drops them when it closes.
+          state = ReceiptScanState(photos: _photos.length, reviewReady: true);
         } else {
           state = ReceiptScanState(
             photos: _photos.length,
@@ -116,10 +124,40 @@ class ReceiptScanViewModel extends Notifier<ReceiptScanState> {
     }
   }
 
+  /// What the user confirmed before, as printed key -> product name of the list now (a
+  /// pair whose product is gone is left out).
+  Future<Map<String, String>> _aliasNames(ListState list) async {
+    final listId = ref.read(activeGroupIdProvider);
+    if (listId == null) return const {};
+    final stored = await ref.read(receiptAliasRepositoryProvider).load(listId);
+    final names = {for (final p in list.products) p.id: p.name};
+    return {
+      for (final e in stored.entries)
+        if (names[e.value] != null) e.key: names[e.value]!,
+    };
+  }
+
+  /// The names the model is told, the ones that matter most first, because a long list
+  /// is cut: what is wanted now (a wrong tick hides exactly these), then what is bought
+  /// most often, then the rest in list order.
+  static List<String> namesByImportance(ListState list) {
+    final planned = [
+      for (final p in list.products)
+        if (p.planned) p,
+    ];
+    final rest = [
+      for (final p in list.products)
+        if (!p.planned) p,
+    ]..sort((a, b) => b.usage.compareTo(a.usage));
+    return [
+      for (final p in [...planned, ...rest]) p.name,
+    ];
+  }
+
   /// The review screen took over; the next scan starts clean.
   void reviewShown() {
     if (!state.reviewReady) return;
-    state = const ReceiptScanState();
+    state = ReceiptScanState(photos: _photos.length);
   }
 
   void problemShown() {
@@ -127,7 +165,10 @@ class ReceiptScanViewModel extends Notifier<ReceiptScanState> {
     state = ReceiptScanState(photos: _photos.length, busy: state.busy);
   }
 
-  /// Drops the photos (the user gave up).
+  /// The photos of the receipt being read or reviewed (memory only).
+  List<Uint8List> get photos => List.unmodifiable(_photos);
+
+  /// Drops the photos (the user gave up, or the review is closed).
   void reset() {
     _photos.clear();
     state = const ReceiptScanState();

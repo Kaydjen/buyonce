@@ -20,6 +20,9 @@ class ReviewRow {
     required this.checked,
     this.alreadyMine = false,
     this.partnerHas = false,
+    this.doubtful = false,
+    this.meaning,
+    this.fromAlias = false,
   });
 
   /// Stable inside one review (`r0`, `r1`, ...).
@@ -54,6 +57,16 @@ class ReviewRow {
   /// The partner marked it: their mark is read-only, so the row is muted and disabled.
   final bool partnerHas;
 
+  /// The match is only a candidate (`MatchTier.check`): not ticked until the user says
+  /// so, the printed text beside it is what they check it against.
+  final bool doubtful;
+
+  /// The reader's short reading of the printed text ("jaja = яйця").
+  final String? meaning;
+
+  /// This printed text was confirmed by the user before.
+  final bool fromAlias;
+
   bool get isNew => product == null;
   bool get locked => partnerHas && !alreadyMine;
 
@@ -70,6 +83,7 @@ class ReviewRow {
     bool? checked,
     bool? alreadyMine,
     bool? partnerHas,
+    bool? doubtful,
   }) => ReviewRow(
     id: id,
     product: clearProduct ? null : product ?? this.product,
@@ -82,6 +96,9 @@ class ReviewRow {
     checked: checked ?? this.checked,
     alreadyMine: alreadyMine ?? this.alreadyMine,
     partnerHas: partnerHas ?? this.partnerHas,
+    doubtful: doubtful ?? this.doubtful,
+    meaning: meaning,
+    fromAlias: fromAlias,
   );
 }
 
@@ -89,10 +106,10 @@ class ReviewRow {
 /// the catalog, merged by product, with the user's choices (checked, amount, new name).
 /// Immutable: every change returns a new review. Nothing here writes anything.
 ///
-/// Rules (receipt-design.md): a matched row starts checked, a new one unchecked (a
-/// receipt holds things that must not enter the catalog); a product I already marked
-/// stays checked; a product the partner marked is locked; two lines of one product are
-/// one row; a new name equal to a catalog name turns the row into that product.
+/// Rules: a confirmed match starts checked; a candidate ("check") and a line that is not
+/// on the list start unchecked, because a wrong tick hides a need and nobody notices; a
+/// product the partner marked is locked and unchecked; two lines of one product are one
+/// row; a new name equal to a catalog product turns the row into that product.
 class ReceiptReview {
   const ReceiptReview({
     required this.rows,
@@ -147,6 +164,9 @@ class ReceiptReview {
         price: line.price,
         discount: line.discount,
         raws: [line.raw],
+        doubtful: product != null && line.tier == MatchTier.check,
+        meaning: line.meaning,
+        fromAlias: line.fromAlias,
       );
       review = review._add(row);
     }
@@ -178,6 +198,59 @@ class ReceiptReview {
     for (final r in rows)
       if (r.isNew) r,
   ];
+
+  /// Matches the app is not sure of: shown first, unchecked until the user decides.
+  List<ReviewRow> get toCheck => [
+    for (final r in found)
+      if (r.doubtful) r,
+  ];
+
+  /// Matches both readers (or the user's earlier confirmation) stand behind.
+  List<ReviewRow> get confirmed => [
+    for (final r in found)
+      if (!r.doubtful) r,
+  ];
+
+  /// What the list wants now: planned products.
+  List<Product> get plannedProducts => [
+    for (final p in products)
+      if (p.planned) p,
+  ];
+
+  /// Planned products the receipt does not show and nobody has ticked: the "did I
+  /// forget something" part. A product that only a candidate points at is not here (it
+  /// is in the rows).
+  List<Product> get missing {
+    final inRows = {
+      for (final r in rows)
+        if (r.product != null) r.product!.id,
+    };
+    return [
+      for (final p in plannedProducts)
+        if (!inRows.contains(p.id) &&
+            !myMarkIds.contains(p.id) &&
+            !partnerMarkIds.contains(p.id))
+          p,
+    ];
+  }
+
+  /// How many planned products are bought: ticked by anybody already, or checked here.
+  int get listBought {
+    final here = {
+      for (final r in rows)
+        if (r.product != null && r.checked && !r.locked) r.product!.id,
+    };
+    return plannedProducts
+        .where(
+          (p) =>
+              myMarkIds.contains(p.id) ||
+              partnerMarkIds.contains(p.id) ||
+              here.contains(p.id),
+        )
+        .length;
+  }
+
+  int get listSize => plannedProducts.length;
 
   /// Rows "Mark N" will act on: checked and not locked.
   List<ReviewRow> get chosen => [
@@ -247,7 +320,11 @@ class ReceiptReview {
     if (product == null) {
       if (current.isNew) return this;
       final back = _stateFor(
-        current.copyWith(clearProduct: true, name: current.proposed),
+        current.copyWith(
+          clearProduct: true,
+          name: current.proposed,
+          doubtful: false,
+        ),
         checked: false,
       );
       final twin = rows
@@ -259,7 +336,7 @@ class ReceiptReview {
       return twin == null ? _replace(id, (_) => back) : _merge(twin, back);
     }
     final moved = _stateFor(
-      current.copyWith(product: product, name: product.name),
+      current.copyWith(product: product, name: product.name, doubtful: false),
       checked: true,
     );
     final twin = rows
@@ -293,8 +370,8 @@ class ReceiptReview {
   ReceiptReview _replace(String id, ReviewRow Function(ReviewRow) change) =>
       _copy([for (final r in rows) r.id == id ? change(r) : r]);
 
-  /// A row in its starting state for [product]: found rows start checked, new ones
-  /// not; marks decide the rest.
+  /// A row in its starting state: a confirmed match starts checked, a candidate and a
+  /// line that is not on the list do not; marks decide the rest.
   ReviewRow _fresh(
     String id, {
     Product? product,
@@ -304,6 +381,9 @@ class ReceiptReview {
     Money? price,
     Money? discount,
     required List<String> raws,
+    bool doubtful = false,
+    String? meaning,
+    bool fromAlias = false,
   }) => _stateFor(
     ReviewRow(
       id: id,
@@ -314,9 +394,12 @@ class ReceiptReview {
       price: price,
       discount: discount,
       raws: raws,
-      checked: false,
+      checked: product != null && !doubtful,
+      doubtful: doubtful,
+      meaning: meaning,
+      fromAlias: fromAlias,
     ),
-    checked: product != null,
+    checked: product != null && !doubtful,
   );
 
   /// Sets the mark flags and the checked state of a row that now stands for its
@@ -358,6 +441,7 @@ class ReceiptReview {
       clearDiscount: discount == null,
       raws: [...into.raws, ...other.raws],
       checked: into.checked || other.checked,
+      doubtful: into.doubtful && other.doubtful,
     );
     return _copy([
       for (final r in rows)

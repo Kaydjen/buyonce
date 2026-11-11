@@ -588,6 +588,7 @@ class ListRepository {
     for (var i = 0; i < rows.length; i++) {
       final id = ids[i]!;
       final row = rows[i];
+      final printed = _printedText(row.raws);
       final index = marks.indexWhere((m) => m.productId == id);
       if (index < 0 && partnerMarked.contains(id)) continue;
       if (index >= 0) {
@@ -595,6 +596,7 @@ class ListRepository {
           amount: row.amount.isNone ? null : row.amount,
           price: row.price,
           discount: row.discount,
+          receiptText: printed,
         );
       } else {
         marks.add(
@@ -605,6 +607,7 @@ class ListRepository {
             amount: row.amount.isNone ? needs[id] ?? Amount.none : row.amount,
             price: row.price,
             discount: row.discount,
+            receiptText: printed,
           ),
         );
       }
@@ -615,6 +618,12 @@ class ListRepository {
     final saved = await _saveTrip(open, trip);
     if (saved case Failure(:final error)) return Failure(error);
     return Ok(count);
+  }
+
+  /// The printed lines of a row as one short text for the trace on the mark.
+  static String? _printedText(List<String> raws) {
+    final text = clip(raws.join(' · '), 200);
+    return text.isEmpty ? null : text;
   }
 
   /// Sets how much of [product] is wanted. A product I have marked changes its mark in

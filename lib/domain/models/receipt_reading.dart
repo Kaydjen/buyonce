@@ -5,6 +5,21 @@ import 'money.dart';
 /// review screen can count what it skipped and the sum check can add the line up.
 enum ReceiptLineKind { item, discount, fee, deposit, bag, total, other }
 
+/// How far a match of a line with a catalog product can be trusted. Decided by the app
+/// (`decideMatches`), never by the model alone: a wrong tick hides a real need and
+/// nobody notices, so only a CONFIRMED match is ticked by itself.
+enum MatchTier {
+  /// Ticked: the user confirmed this printed text before, or two readers agree, the
+  /// model quoted the printed words it relied on, and the product has no look-alike.
+  confirmed,
+
+  /// A candidate only: shown with the printed text, not ticked, the user decides.
+  check,
+
+  /// Nothing in the catalog fits.
+  none,
+}
+
 /// One line of a receipt as the model read it, already cleaned by the app.
 class ReceiptLine {
   const ReceiptLine({
@@ -15,7 +30,12 @@ class ReceiptLine {
     this.amount = Amount.none,
     this.price,
     this.discount,
-  });
+    MatchTier? tier,
+    this.highConfidence = false,
+    this.evidenceOk = false,
+    this.meaning,
+    this.fromAlias = false,
+  }) : _tier = tier; // ignore: prefer_initializing_formals
 
   /// The line as printed (trimmed, clipped).
   final String raw;
@@ -36,6 +56,61 @@ class ReceiptLine {
 
   /// What the line saved (>= 0); null = no discount printed for it.
   final Money? discount;
+
+  final MatchTier? _tier;
+
+  /// The trust in [match]. A line built without a tier counts as confirmed when it has
+  /// a match (a hand-made reading), else none.
+  MatchTier get tier =>
+      _tier ?? (match == null ? MatchTier.none : MatchTier.confirmed);
+
+  /// The reader said "high" for its match.
+  final bool highConfidence;
+
+  /// The words the reader quoted as its reason were really in the printed text.
+  final bool evidenceOk;
+
+  /// The reader's short reading of the printed text ("jaja = яйця"), shown beside a
+  /// match so that it can be checked at a glance.
+  final String? meaning;
+
+  /// The match comes from a pair the user confirmed earlier.
+  final bool fromAlias;
+
+  ReceiptLine withMatch({
+    required String? match,
+    required MatchTier tier,
+    bool fromAlias = false,
+  }) => ReceiptLine(
+    raw: raw,
+    kind: kind,
+    match: match,
+    name: name,
+    amount: amount,
+    price: price,
+    discount: discount,
+    tier: tier,
+    highConfidence: highConfidence,
+    evidenceOk: evidenceOk,
+    meaning: meaning,
+    fromAlias: fromAlias,
+  );
+
+  ReceiptLine withMoney({required Money? price, required Money? discount}) =>
+      ReceiptLine(
+        raw: raw,
+        kind: kind,
+        match: match,
+        name: name,
+        amount: amount,
+        price: price,
+        discount: discount,
+        tier: _tier,
+        highConfidence: highConfidence,
+        evidenceOk: evidenceOk,
+        meaning: meaning,
+        fromAlias: fromAlias,
+      );
 
   /// The name the review shows: the catalog name, else the proposed one, else the raw
   /// text.
@@ -68,6 +143,14 @@ class ReceiptReading {
 
   /// Saved by the receipt as a whole (loyalty bonus), no line owns it.
   final Money? discount;
+
+  ReceiptReading withLines(List<ReceiptLine> lines) => ReceiptReading(
+    lines: lines,
+    store: store,
+    date: date,
+    total: total,
+    discount: discount,
+  );
 
   /// The lines that can become products or marks, in receipt order.
   Iterable<ReceiptLine> get items =>

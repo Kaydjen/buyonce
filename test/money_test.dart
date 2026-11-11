@@ -161,7 +161,14 @@ void main() {
       expect(back[1].store, isNull);
       expect(back[1].total, isNull);
       expect(receiptsFromData(null), isEmpty);
-      expect(receiptsFromData([5, 'x', {'total': 'bad'}]).single.total, isNull);
+      expect(
+        receiptsFromData([
+          5,
+          'x',
+          {'total': 'bad'},
+        ]).single.total,
+        isNull,
+      );
       final trip = tripFromData('g', 't', {
         'userId': 'bob',
         'startedAt': Timestamp.fromDate(t0),
@@ -229,4 +236,53 @@ void main() {
     );
     expect(m.copyWith(clearPrice: true).price, isNull);
   });
+
+  test(
+    'the printed receipt line stays on the mark (Firestore and local snapshot)',
+    () async {
+      final marked = TripMark(
+        productId: 'a',
+        userId: 'bob',
+        markedAt: t0,
+        receiptText: 'JajaSciol M 10szt C 1 x10,99 10,99C',
+      );
+      final data = marksToData([marked]);
+      expect(data['a'], isA<Map>()); // not the bare time any more
+      final trip = tripFromData('g', 't', {
+        'userId': 'bob',
+        'startedAt': Timestamp.fromDate(t0),
+        'marks': data,
+      });
+      expect(
+        trip.marks.single.receiptText,
+        'JajaSciol M 10szt C 1 x10,99 10,99C',
+      );
+
+      final service = InMemoryListService(seed: false);
+      await service.createTrip(
+        Trip(
+          id: 't',
+          groupId: 'personal-me',
+          userId: 'me',
+          startedAt: t0,
+          marks: [
+            marked,
+            TripMark(productId: 'b', userId: 'me', markedAt: t0),
+          ],
+        ),
+      );
+      final json = jsonDecode(
+        jsonEncode(service.snapshotOf('personal-me').toJson()),
+      );
+      final back = ListSnapshot.tryParse(json)!.trips.single;
+      expect(
+        back.marks.firstWhere((m) => m.productId == 'a').receiptText,
+        'JajaSciol M 10szt C 1 x10,99 10,99C',
+      );
+      expect(
+        back.marks.firstWhere((m) => m.productId == 'b').receiptText,
+        isNull,
+      );
+    },
+  );
 }

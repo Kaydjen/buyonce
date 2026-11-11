@@ -503,26 +503,34 @@ class AppLocalizationsUk extends AppLocalizations {
   String get receiptTitle => 'Чек';
 
   @override
-  String get receiptFound => 'Знайдено';
-
-  @override
-  String receiptSkipped(int count) {
-    return 'Пропущено: $count';
+  String receiptBoughtOf(int bought, int total) {
+    return 'Куплено $bought з $total';
   }
 
   @override
-  String get selectAllNew => 'Вибрати все';
+  String get receiptCheckTitle => 'Перевірте';
+
+  @override
+  String get receiptInTitle => 'У чеку';
+
+  @override
+  String get receiptMissingTitle => 'Немає в чеку';
+
+  @override
+  String receiptMoreLines(int count) {
+    return 'Ще рядків у чеку: $count';
+  }
+
+  @override
+  String get receiptNoneOfThese => 'Жоден з цих';
+
+  @override
+  String get receiptViewTooltip => 'Фото чека';
 
   @override
   String markCount(int count) {
     return 'Відмітити $count';
   }
-
-  @override
-  String get pricesMayBeMisread => 'Ціни могли бути прочитані неточно';
-
-  @override
-  String get newProduct => 'Новий продукт';
 
   @override
   String get models => 'Моделі';

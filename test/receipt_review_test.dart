@@ -50,29 +50,26 @@ ReceiptReview _review(
 
 void main() {
   group('start', () {
-    test(
-      'matched rows start checked, new ones not; skipped lines are counted',
-      () {
-        final r = _review(
-          [
-            _item('MLEKO', match: 'Milk', price: 350),
-            _item('SER', name: 'Cheese', price: 900),
-          ],
-          others: const [
-            ReceiptLine(raw: 'SUMA', kind: ReceiptLineKind.total),
-            ReceiptLine(raw: 'PTU', kind: ReceiptLineKind.other),
-          ],
-        );
-        expect(r.found.single.product, _milk);
-        expect(r.found.single.checked, isTrue);
-        expect(r.found.single.price, const Money(350, 'PLN'));
-        expect(r.fresh.single.name, 'Cheese');
-        expect(r.fresh.single.checked, isFalse);
-        expect(r.skipped, 2);
-        expect(r.store, 'Auchan');
-        expect(r.checkedCount, 1);
-      },
-    );
+    test('a confirmed row starts checked, a line not on the list does not; skipped lines are counted', () {
+      final r = _review(
+        [
+          _item('MLEKO', match: 'Milk', price: 350),
+          _item('SER', name: 'Cheese', price: 900),
+        ],
+        others: const [
+          ReceiptLine(raw: 'SUMA', kind: ReceiptLineKind.total),
+          ReceiptLine(raw: 'PTU', kind: ReceiptLineKind.other),
+        ],
+      );
+      expect(r.found.single.product, _milk);
+      expect(r.found.single.checked, isTrue);
+      expect(r.found.single.price, const Money(350, 'PLN'));
+      expect(r.fresh.single.name, 'Cheese');
+      expect(r.fresh.single.checked, isFalse);
+      expect(r.skipped, 2);
+      expect(r.store, 'Auchan');
+      expect(r.checkedCount, 1);
+    });
 
     test('a match to an unknown product (deleted since) becomes new', () {
       final r = _review([_item('X', match: 'Gone', name: 'Gone')]);
@@ -95,6 +92,86 @@ void main() {
         _review([_item('A', match: 'Milk', price: 100)]).pricesMayBeWrong,
         isFalse,
       );
+    });
+  });
+
+  group('doubtful matches', () {
+    ReceiptLine candidate(String raw, String match) => ReceiptLine(
+      raw: raw,
+      kind: ReceiptLineKind.item,
+      match: match,
+      tier: MatchTier.check,
+      meaning: 'x = y',
+    );
+
+    test('a candidate is shown with its product but not ticked', () {
+      final r = ReceiptReview.from(
+        ReceiptReading(lines: [candidate('PODU KU MEGA', 'Milk')]),
+        products: _products,
+        myMarkIds: const {},
+        partnerMarkIds: const {},
+      );
+      final row = r.found.single;
+      expect(row.product, _milk);
+      expect(row.doubtful, isTrue);
+      expect(row.checked, isFalse);
+      expect(row.meaning, 'x = y');
+      expect(r.chosen, isEmpty);
+      // The user ticks it: that is a decision.
+      expect(r.toggle(row.id).chosen.single.product, _milk);
+    });
+
+    test('choosing a product by hand ends the doubt and ticks the row', () {
+      final r = ReceiptReview.from(
+        ReceiptReading(lines: [candidate('PODU KU MEGA', 'Milk')]),
+        products: _products,
+        myMarkIds: const {},
+        partnerMarkIds: const {},
+      );
+      final picked = r.pick(r.found.single.id, _bread);
+      expect(picked.found.single.doubtful, isFalse);
+      expect(picked.found.single.checked, isTrue);
+    });
+
+    test(
+      'a candidate I already ticked stays ticked; a partner mark still locks',
+      () {
+        final mine = ReceiptReview.from(
+          ReceiptReading(lines: [candidate('X', 'Milk')]),
+          products: _products,
+          myMarkIds: const {'milk'},
+          partnerMarkIds: const {},
+        );
+        expect(mine.found.single.checked, isTrue);
+        final theirs = ReceiptReview.from(
+          ReceiptReading(lines: [candidate('X', 'Milk')]),
+          products: _products,
+          myMarkIds: const {},
+          partnerMarkIds: const {'milk'},
+        );
+        expect(theirs.found.single.locked, isTrue);
+      },
+    );
+
+    test('a confirmed line and a candidate of one product: confirmed row', () {
+      final r = ReceiptReview.from(
+        ReceiptReading(
+          lines: [
+            ReceiptLine(
+              raw: 'A',
+              kind: ReceiptLineKind.item,
+              match: 'Milk',
+              tier: MatchTier.confirmed,
+            ),
+            candidate('B', 'Milk'),
+          ],
+        ),
+        products: _products,
+        myMarkIds: const {},
+        partnerMarkIds: const {},
+      );
+      expect(r.found.single.doubtful, isFalse);
+      expect(r.found.single.checked, isTrue);
     });
   });
 
@@ -202,12 +279,14 @@ void main() {
 
     test('toggle and select-all of New', () {
       final cheese = base.fresh.first.id;
+      expect(base.checkedCount, 1);
       expect(base.toggle(cheese).fresh.first.checked, isTrue);
       expect(base.toggle(cheese).toggle(cheese).fresh.first.checked, isFalse);
       final all = base.setAllNew(true);
-      expect(all.fresh.every((r) => r.checked), isTrue);
       expect(all.checkedCount, 3);
-      expect(all.setAllNew(false).checkedCount, 1);
+      final none = all.setAllNew(false);
+      expect(none.fresh.every((r) => !r.checked), isTrue);
+      expect(none.checkedCount, 1);
     });
 
     test('amount is set on a row', () {
@@ -249,7 +328,7 @@ void main() {
       expect(merged.found.single.raws, ['MLEKO', 'JAJA']);
     });
 
-    test('picking "New product" returns to the proposed name, unchecked', () {
+    test('picking "None of these" returns to the proposed name, unchecked', () {
       final r = base.pick(base.found.single.id, null);
       expect(r.found, isEmpty);
       expect(r.fresh.first.name, 'MLEKO');
@@ -304,10 +383,10 @@ void main() {
           isTrue,
         ); // the fake list has my mark on Milk
         expect(review.found.single.checked, isTrue);
+        expect(review.fresh.single.checked, isFalse);
         vm.toggle(review.fresh.single.id);
         review = container.read(receiptReviewProvider)!;
         expect(review.fresh.single.checked, isTrue);
-        vm.setAllNew(false);
         vm.rename(
           container.read(receiptReviewProvider)!.fresh.single.id,
           'Bread',
@@ -320,6 +399,90 @@ void main() {
         expect(container.read(receiptReviewProvider), isNull);
       },
     );
+  });
+
+  group('the list against the receipt', () {
+    final planned = _p('eggs', 'Eggs').copyWith(planned: true);
+    final plannedBread = _p('bread', 'Bread').copyWith(planned: true);
+    final plannedMilk = _p('milk', 'Milk').copyWith(planned: true);
+
+    ReceiptReview of(
+      List<ReceiptLine> lines, {
+      Set<String> mine = const {},
+      Set<String> partner = const {},
+    }) => ReceiptReview.from(
+      ReceiptReading(lines: lines),
+      products: [plannedMilk, plannedBread, planned, _p('tea', 'Tea')],
+      myMarkIds: mine,
+      partnerMarkIds: partner,
+    );
+
+    test(
+      'the headline counts planned products bought, the rest are missing',
+      () {
+        final r = of([
+          _item('MLEKO', match: 'Milk'),
+          _item('TEA', match: 'Tea'),
+        ]);
+        expect(r.listSize, 3);
+        expect(r.listBought, 1); // Milk; Tea is not planned
+        expect(r.missing.map((p) => p.name), ['Bread', 'Eggs']);
+      },
+    );
+
+    test('what I or the partner already ticked is bought and not missing', () {
+      final r = of(const [], mine: {'bread'}, partner: {'eggs'});
+      expect(r.listBought, 2);
+      expect(r.missing.map((p) => p.name), ['Milk']);
+    });
+
+    test(
+      'unchecking a match lowers the count, a candidate is not "missing"',
+      () {
+        final r = of([
+          ReceiptLine(
+            raw: 'X',
+            kind: ReceiptLineKind.item,
+            match: 'Bread',
+            tier: MatchTier.check,
+          ),
+          _item('MLEKO', match: 'Milk'),
+        ]);
+        expect(r.listBought, 1); // the candidate is not ticked
+        expect(r.missing.map((p) => p.name), ['Eggs']); // Bread has a candidate
+        expect(r.toggle(r.toCheck.single.id).listBought, 2);
+        expect(r.toggle(r.confirmed.single.id).listBought, 0);
+      },
+    );
+
+    test(
+      'pointing a spare line at a missing product moves it out of missing',
+      () {
+        final r = of([_item('JAJA SCIOL', name: 'Jaja')]);
+        expect(r.missing.map((p) => p.name), contains('Eggs'));
+        final linked = r.pick(r.fresh.single.id, planned);
+        expect(linked.missing.map((p) => p.name), isNot(contains('Eggs')));
+        expect(linked.confirmed.single.product!.name, 'Eggs');
+        expect(linked.confirmed.single.checked, isTrue);
+        expect(linked.fresh, isEmpty);
+      },
+    );
+
+    test('sections: candidates first, confirmed next, spare lines apart', () {
+      final r = of([
+        ReceiptLine(
+          raw: 'A',
+          kind: ReceiptLineKind.item,
+          match: 'Bread',
+          tier: MatchTier.check,
+        ),
+        _item('MLEKO', match: 'Milk'),
+        _item('KOMIN', name: 'Komin'),
+      ]);
+      expect(r.toCheck.map((x) => x.name), ['Bread']);
+      expect(r.confirmed.map((x) => x.name), ['Milk']);
+      expect(r.fresh.map((x) => x.name), ['Komin']);
+    });
   });
 }
 

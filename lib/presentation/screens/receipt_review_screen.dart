@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../core/theme/app_tokens.dart';
 import '../../core/utils/clip.dart';
@@ -10,10 +9,8 @@ import '../../domain/models/receipt_review.dart';
 import '../../l10n/l10n.dart';
 import '../view_models/list/list_view_model.dart';
 import '../view_models/receipt/receipt_review_view_model.dart';
+import '../view_models/receipt/receipt_scan_view_model.dart';
 import '../widgets/accent_button.dart';
-import '../widgets/amount_editor.dart';
-import '../widgets/amount_text.dart';
-import '../widgets/card_action.dart';
 import '../widgets/card_dialog.dart';
 import '../widgets/card_sheet.dart';
 import '../widgets/card_title.dart';
@@ -21,11 +18,17 @@ import '../widgets/group_dialogs.dart';
 import '../widgets/groove.dart';
 import '../widgets/inset.dart';
 import '../widgets/panel.dart';
-import '../widgets/toast.dart';
+import 'receipt_photo_viewer.dart';
 
-/// The check of a scanned receipt before anything is written: "Found" products (checked),
-/// "New" ones (unchecked), and how many lines were skipped. Back writes nothing; "Mark N"
-/// puts the checked rows into the open trip and closes with how many it marked.
+/// What a scanned receipt says about the user's LIST, before anything is written.
+///
+/// The question it answers is "what did I buy from my list?": a headline ("Bought 6 of
+/// 9"), the matches the app is not sure of ("Check these", unticked, each with the
+/// printed line and its reading beside it), the matches it is sure of ("On the
+/// receipt", ticked), the planned products the receipt does not show ("Not on the
+/// receipt", so a forgotten one is seen), and the other lines of the receipt folded
+/// into one row. The photo of the receipt is one tap away for checking against it.
+/// Back writes nothing; the button ticks the checked rows and closes with how many.
 class ReceiptReviewScreen extends ConsumerStatefulWidget {
   const ReceiptReviewScreen({super.key});
 
@@ -36,18 +39,7 @@ class ReceiptReviewScreen extends ConsumerStatefulWidget {
 
 class _ReceiptReviewScreenState extends ConsumerState<ReceiptReviewScreen> {
   bool _marking = false;
-
-  @override
-  void initState() {
-    super.initState();
-    // Prices that do not add up: said once, without any amount.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted &&
-          ref.read(receiptReviewProvider)?.pricesMayBeWrong == true) {
-        showToast(context, context.l10n.pricesMayBeMisread);
-      }
-    });
-  }
+  bool _showOthers = false;
 
   ReceiptReviewViewModel get _vm => ref.read(receiptReviewProvider.notifier);
 
@@ -60,27 +52,36 @@ class _ReceiptReviewScreenState extends ConsumerState<ReceiptReviewScreen> {
     if (mounted) Navigator.of(context).pop(n);
   }
 
-  /// A matched row: another product, or "New product". A new row: its name.
-  Future<void> _editName(ReviewRow row) async {
-    if (row.isNew) {
-      final l10n = context.l10n;
-      await showCardDialog<void>(
-        context,
-        builder: (_) => PromptDialog(
-          title: l10n.rename,
-          hint: l10n.nameHint,
-          confirm: l10n.save,
-          initial: row.name,
-          maxLength: maxProductNameLength,
-          onSubmit: (text) async {
-            if (ProductNames.normalize(text).isEmpty) return l10n.enterName;
-            _vm.rename(row.id, text);
-            return null;
-          },
-        ),
-      );
-      return;
-    }
+  void _openPhotos() => Navigator.of(context).push<void>(
+    MaterialPageRoute(
+      builder: (_) => ReceiptPhotoViewer(
+        photos: ref.read(receiptScanProvider.notifier).photos,
+      ),
+    ),
+  );
+
+  /// A line of the receipt that is not on the list: a new name for it.
+  Future<void> _rename(ReviewRow row) async {
+    final l10n = context.l10n;
+    await showCardDialog<void>(
+      context,
+      builder: (_) => PromptDialog(
+        title: l10n.rename,
+        hint: l10n.nameHint,
+        confirm: l10n.save,
+        initial: row.name,
+        maxLength: maxProductNameLength,
+        onSubmit: (text) async {
+          if (ProductNames.normalize(text).isEmpty) return l10n.enterName;
+          _vm.rename(row.id, text);
+          return null;
+        },
+      ),
+    );
+  }
+
+  /// A match that is wrong: another product of the list, or "None of these".
+  Future<void> _pickProduct(ReviewRow row) async {
     final products =
         ref.read(listViewModelProvider).value?.products ?? const [];
     await showCardSheet<void>(
@@ -96,14 +97,29 @@ class _ReceiptReviewScreenState extends ConsumerState<ReceiptReviewScreen> {
     );
   }
 
-  Future<void> _editAmount(ReviewRow row) => showAmountEditor(
-    context,
-    name: row.name,
-    initial: row.amount,
-    onDone: (amount) {
-      if (amount != row.amount) _vm.setAmount(row.id, amount);
-    },
-  );
+  /// A product the receipt does not show: which printed line is it after all?
+  Future<void> _linkLine(Product product, List<ReviewRow> lines) async {
+    await showCardSheet<void>(
+      context,
+      builder: (_) => SheetCard(
+        children: [
+          for (final line in lines)
+            ListTile(
+              key: ValueKey('link-${line.id}'),
+              title: Text(
+                line.raws.join(' · '),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              onTap: () {
+                Navigator.of(context).pop();
+                _vm.pick(line.id, product);
+              },
+            ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -114,130 +130,185 @@ class _ReceiptReviewScreenState extends ConsumerState<ReceiptReviewScreen> {
       // The review was dropped (the screen is leaving): nothing to show.
       return const Scaffold(body: SizedBox.shrink());
     }
-    final locale = Localizations.localeOf(context).toString();
-    final muted = Theme.of(context).textTheme.bodySmall!
-        .copyWith(color: t.muted);
+    final hasPhotos = ref.watch(
+      receiptScanProvider.select((s) => s.photos > 0),
+    );
+    final others = review.fresh;
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(review.store ?? l10n.receiptTitle),
-            if (review.date != null)
-              Text(DateFormat.yMMMd(locale).format(review.date!), style: muted),
-          ],
-        ),
+        title: Text(review.store ?? l10n.receiptTitle),
+        actions: [
+          if (hasPhotos)
+            IconButton(
+              key: const Key('viewReceipt'),
+              tooltip: l10n.receiptViewTooltip,
+              onPressed: _openPhotos,
+              icon: const Icon(Icons.receipt_long_outlined),
+            ),
+        ],
       ),
       body: ListView(
         padding: EdgeInsets.fromLTRB(t.gutter, 8, t.gutter, 120),
         children: [
-          if (review.found.isNotEmpty)
-            _card(
-              key: const Key('foundCard'),
-              title: CardTitle(l10n.receiptFound),
-              rows: review.found,
-            ),
-          if (review.fresh.isNotEmpty) ...[
-            if (review.found.isNotEmpty) const SizedBox(height: 16),
-            _card(
-              key: const Key('newCard'),
-              title: CardTitle(
-                l10n.newLabel,
-                trailing: CardIconAction(
-                  key: const Key('selectAllNew'),
-                  icon: Icons.done_all,
-                  label: l10n.selectAllNew,
-                  onPressed: () => _vm.setAllNew(
-                    // All checked: the same icon clears them.
-                    !review.fresh.every((r) => r.checked || r.locked),
-                  ),
-                ),
+          if (review.listSize > 0)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+              child: Text(
+                l10n.receiptBoughtOf(review.listBought, review.listSize),
+                key: const Key('boughtHeader'),
+                style: Theme.of(context).textTheme.titleLarge,
               ),
-              rows: review.fresh,
+            ),
+          if (review.toCheck.isNotEmpty)
+            _card(
+              key: const Key('checkCard'),
+              title: l10n.receiptCheckTitle,
+              rows: review.toCheck,
+            ),
+          if (review.confirmed.isNotEmpty) ...[
+            if (review.toCheck.isNotEmpty) const SizedBox(height: 16),
+            _card(
+              key: const Key('inCard'),
+              title: l10n.receiptInTitle,
+              rows: review.confirmed,
             ),
           ],
-          if (review.skipped > 0)
-            Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: Center(
-                child: Text(
-                  l10n.receiptSkipped(review.skipped),
-                  key: const Key('skippedCount'),
-                  style: muted,
-                ),
-              ),
-            ),
+          if (review.missing.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            _missingCard(review.missing, others),
+          ],
+          if (others.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            _othersCard(others),
+          ],
         ],
       ),
-      floatingActionButton: AnimatedOpacity(
-        opacity: review.checkedCount == 0 ? 0 : 1,
-        duration: const Duration(milliseconds: 200),
-        child: IgnorePointer(
-          ignoring: review.checkedCount == 0 || _marking,
-          child: AccentButton(
-            buttonKey: const Key('markReceipt'),
-            label: l10n.markCount(review.checkedCount),
-            onPressed: () => _mark(review),
-          ),
-        ),
+      floatingActionButton: AccentButton(
+        buttonKey: const Key('markReceipt'),
+        label: l10n.markCount(review.checkedCount),
+        onPressed: review.checkedCount == 0 || _marking
+            ? null
+            : () => _mark(review),
       ),
     );
   }
 
   Widget _card({
     required Key key,
-    required Widget title,
+    required String title,
     required List<ReviewRow> rows,
   }) => Panel(
     key: key,
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        title,
+        CardTitle(title),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 16),
           child: Groove(tight: true),
         ),
         for (var i = 0; i < rows.length; i++)
-          _ReviewRowTile(
+          _RowTile(
             key: ValueKey('row-${rows[i].id}'),
             row: rows[i],
             showDivider: i < rows.length - 1,
             onToggle: () => _vm.toggle(rows[i].id),
-            onName: () => _editName(rows[i]),
-            onAmount: () => _editAmount(rows[i]),
+            onName: () => _pickProduct(rows[i]),
           ),
+      ],
+    ),
+  );
+
+  Widget _missingCard(List<Product> missing, List<ReviewRow> lines) => Panel(
+    key: const Key('missingCard'),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        CardTitle(context.l10n.receiptMissingTitle),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: Groove(tight: true),
+        ),
+        for (var i = 0; i < missing.length; i++)
+          _MissingTile(
+            key: ValueKey('missing-${missing[i].id}'),
+            product: missing[i],
+            showDivider: i < missing.length - 1,
+            // A printed line can be pointed at only when the receipt has spare ones.
+            onTap: lines.isEmpty ? null : () => _linkLine(missing[i], lines),
+          ),
+      ],
+    ),
+  );
+
+  /// The lines that are not on the list, folded: nothing happens to them unless the
+  /// user opens the row and ticks one (it then becomes a new product and is marked).
+  Widget _othersCard(List<ReviewRow> others) => Panel(
+    key: const Key('othersCard'),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InkWell(
+          key: const Key('moreLines'),
+          onTap: () => setState(() => _showOthers = !_showOthers),
+          child: SizedBox(
+            height: 56,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      context.l10n.receiptMoreLines(others.length),
+                      style: Theme.of(context).textTheme.bodyLarge!
+                          .copyWith(color: context.tokens.muted),
+                    ),
+                  ),
+                  Icon(
+                    _showOthers ? Icons.expand_less : Icons.expand_more,
+                    color: context.tokens.muted,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (_showOthers)
+          for (var i = 0; i < others.length; i++)
+            _RowTile(
+              key: ValueKey('row-${others[i].id}'),
+              row: others[i],
+              showDivider: i < others.length - 1,
+              onToggle: () => _vm.toggle(others[i].id),
+              onName: () => _rename(others[i]),
+            ),
       ],
     ),
   );
 }
 
-/// One row: check, name (the printed text under it when it differs), the amount.
-class _ReviewRowTile extends StatelessWidget {
-  const _ReviewRowTile({
+/// One match: check, the product, the printed text under it, and for a candidate the
+/// reader's reading of that text.
+class _RowTile extends StatelessWidget {
+  const _RowTile({
     super.key,
     required this.row,
     required this.showDivider,
     required this.onToggle,
     required this.onName,
-    required this.onAmount,
   });
 
   final ReviewRow row;
   final bool showDivider;
   final VoidCallback onToggle;
   final VoidCallback onName;
-  final VoidCallback onAmount;
 
   @override
   Widget build(BuildContext context) {
     final t = context.tokens;
     final theme = Theme.of(context).textTheme;
     final locked = row.locked;
-    final printed = row.raws
-        .where((r) => !ProductNames.same(r, row.name))
-        .join(' · ');
-    final amount = amountText(context, row.amount);
+    final muted = theme.bodySmall!.copyWith(color: t.muted);
     return Opacity(
       opacity: locked ? 0.5 : 1,
       child: Container(
@@ -272,36 +343,27 @@ class _ReviewRowTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: theme.bodyLarge,
                       ),
-                      if (printed.isNotEmpty)
+                      Text(
+                        row.raws.join(' · '),
+                        key: ValueKey('printed-${row.id}'),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: muted,
+                      ),
+                      if (row.doubtful && row.meaning != null)
                         Text(
-                          printed,
+                          row.meaning!,
+                          key: ValueKey('meaning-${row.id}'),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: theme.bodySmall!.copyWith(color: t.muted),
+                          style: muted,
                         ),
                     ],
                   ),
                 ),
               ),
             ),
-            InkWell(
-              key: ValueKey('amount-${row.id}'),
-              onTap: locked ? null : onAmount,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 56, minHeight: 56),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Center(
-                    child: Text(
-                      amount.isEmpty ? context.l10n.amountCount(1) : amount,
-                      style: theme.bodyMedium!.copyWith(
-                        color: amount.isEmpty ? t.muted : t.text,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
+            const SizedBox(width: 12),
           ],
         ),
       ),
@@ -309,7 +371,49 @@ class _ReviewRowTile extends StatelessWidget {
   }
 }
 
-/// The catalog to point a matched row at; the last row turns it into a new product.
+/// A planned product the receipt does not show.
+class _MissingTile extends StatelessWidget {
+  const _MissingTile({
+    super.key,
+    required this.product,
+    required this.showDivider,
+    required this.onTap,
+  });
+
+  final Product product;
+  final bool showDivider;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = context.tokens;
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 56),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        decoration: BoxDecoration(
+          border: showDivider
+              ? Border(bottom: BorderSide(color: t.line))
+              : null,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                product.name,
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+            ),
+            if (onTap != null) Icon(Icons.chevron_right, color: t.muted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The list to point a match at; the last row sends the line back to "other lines".
 class _ProductPicker extends StatefulWidget {
   const _ProductPicker({
     required this.products,
@@ -368,8 +472,8 @@ class _ProductPickerState extends State<_ProductPicker> {
           ),
         ),
         ListTile(
-          key: const Key('pickNew'),
-          title: Text(context.l10n.newProduct),
+          key: const Key('pickNone'),
+          title: Text(context.l10n.receiptNoneOfThese),
           onTap: () => widget.onPick(null),
         ),
       ],

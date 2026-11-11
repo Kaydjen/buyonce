@@ -8,6 +8,7 @@ import '../../domain/models/amount.dart';
 import '../../domain/models/gemini_outcome.dart';
 import '../../domain/models/money.dart';
 import '../../domain/models/product_names.dart';
+import '../../domain/models/receipt_matching.dart';
 import '../../domain/models/receipt_reading.dart';
 import 'gemini_client.dart';
 import 'name_suggestion_repository.dart';
@@ -18,9 +19,13 @@ sealed class ReceiptParsing {
 }
 
 final class ParsedReceipt extends ReceiptParsing {
-  const ParsedReceipt(this.reading, this.model);
+  const ParsedReceipt(this.reading, this.model, {this.secondOpinion = true});
   final ReceiptReading reading;
   final String model;
+
+  /// The second reader answered. When it did not (limits, no connection) nothing but a
+  /// confirmed alias is ticked: the screen still works, it only trusts less.
+  final bool secondOpinion;
 }
 
 final class NoReceipt extends ReceiptParsing {
@@ -73,7 +78,14 @@ class ReceiptParsingRepository {
           'properties': {
             'raw': {'type': 'STRING'},
             'kind': {'type': 'STRING', 'enum': _kinds},
+            'evidence': {'type': 'STRING', 'nullable': true},
+            'meaning': {'type': 'STRING', 'nullable': true},
             'match': {'type': 'STRING', 'nullable': true},
+            'confidence': {
+              'type': 'STRING',
+              'enum': ['high', 'low'],
+              'nullable': true,
+            },
             'name': {'type': 'STRING', 'nullable': true},
             'count': {'type': 'INTEGER', 'nullable': true},
             'grams': {'type': 'INTEGER', 'nullable': true},
@@ -81,6 +93,22 @@ class ReceiptParsingRepository {
             'price': {'type': 'STRING', 'nullable': true},
             'discount': {'type': 'STRING', 'nullable': true},
           },
+          // The reason comes before the answer: a model that has to quote the printed
+          // words first guesses less.
+          'propertyOrdering': [
+            'raw',
+            'kind',
+            'evidence',
+            'meaning',
+            'match',
+            'confidence',
+            'name',
+            'count',
+            'grams',
+            'millilitres',
+            'price',
+            'discount',
+          ],
           'required': ['raw', 'kind'],
         },
       },
@@ -88,16 +116,43 @@ class ReceiptParsingRepository {
     'required': ['lines'],
   };
 
+  static const matcherSchema = <String, Object?>{
+    'type': 'OBJECT',
+    'properties': {
+      'matches': {
+        'type': 'ARRAY',
+        'items': {
+          'type': 'OBJECT',
+          'properties': {
+            'index': {'type': 'INTEGER'},
+            'evidence': {'type': 'STRING', 'nullable': true},
+            'match': {'type': 'STRING', 'nullable': true},
+          },
+          'propertyOrdering': ['index', 'evidence', 'match'],
+          'required': ['index'],
+        },
+      },
+    },
+    'required': ['matches'],
+  };
+
   /// [photos] are JPEGs of the same receipt, in order (at most [maxPhotos]).
-  /// [knownNames] are the names of the active products; [language] is the English name
-  /// of the app language, used for new names when the catalog is empty;
-  /// [fallbackCurrency] (ISO code) is used when the receipt shows none.
+  /// [knownNames] are the names of the active products, the ones that matter most first
+  /// (a long catalog is cut); [language] is the English name of the app language, used
+  /// for new names when the catalog is empty; [fallbackCurrency] (ISO code) is used
+  /// when the receipt shows none. [aliases] are pairs the user confirmed before
+  /// (printed key -> catalog name).
+  ///
+  /// Two readers: the first reads the photos and proposes matches; a second one, text
+  /// only and preferably another model, is asked about the same lines. `decideMatches`
+  /// ticks only what both agree on.
   Future<ReceiptParsing> read(
     List<Uint8List> photos, {
     required String language,
     required List<String> models,
     required List<String> knownNames,
     required String fallbackCurrency,
+    Map<String, String> aliases = const {},
   }) async {
     if (photos.isEmpty || photos.length > maxPhotos) {
       return const NoReceipt(GeminiFailed());
@@ -111,13 +166,120 @@ class ReceiptParsingRepository {
       models,
     );
     if (outcome is! GeminiOk) return NoReceipt(outcome);
-    final reading = parse(
+    final parsed = parse(
       outcome.text,
       knownNames: knownNames,
       fallbackCurrency: fallbackCurrency,
     );
-    if (reading == null) return const NoReceipt(GeminiFailed());
-    return ParsedReceipt(reading, outcome.model);
+    if (parsed == null) return const NoReceipt(GeminiFailed());
+
+    final second = await _secondOpinion(
+      parsed,
+      knownNames: knownNames,
+      aliases: aliases,
+      models: models,
+      readerModel: outcome.model,
+    );
+    final reading = decideMatches(
+      parsed,
+      knownNames: knownNames,
+      aliases: aliases,
+      matcher: second,
+    );
+    return ParsedReceipt(reading, outcome.model, secondOpinion: second != null);
+  }
+
+  /// The second reader's matches by line index, or null when it could not answer.
+  Future<Map<int, String?>?> _secondOpinion(
+    ReceiptReading reading, {
+    required List<String> knownNames,
+    required Map<String, String> aliases,
+    required List<String> models,
+    required String readerModel,
+  }) async {
+    final asked = <int, String>{};
+    for (var i = 0; i < reading.lines.length; i++) {
+      final line = reading.lines[i];
+      if (line.kind != ReceiptLineKind.item) continue;
+      final learned = aliases[printedKey(line.raw)];
+      if (learned != null &&
+          knownNames.any((n) => ProductNames.same(n, learned))) {
+        continue; // the user already confirmed this one
+      }
+      asked[i] = line.raw;
+    }
+    // Nothing to ask, or nothing to match with: an empty answer is a complete one.
+    if (asked.isEmpty || knownNames.isEmpty) return const {};
+    // Another model than the one that read the photos, when there is one.
+    final others = [
+      for (final m in models)
+        if (m.replaceFirst('models/', '') != readerModel) m,
+    ];
+    final ordered = [...others, ...models.where((m) => !others.contains(m))];
+    final outcome = await _client.generate(
+      GeminiRequest(
+        prompt: matcherPrompt(asked, knownNames),
+        schema: matcherSchema,
+      ),
+      ordered,
+    );
+    if (outcome is! GeminiOk) return null;
+    return parseMatcher(outcome.text, asked, knownNames);
+  }
+
+  static String matcherPrompt(Map<int, String> lines, List<String> knownNames) {
+    final known = knownNames.take(maxKnownNames).toList();
+    return [
+      'These are lines of a shop receipt, as "number: printed text":',
+      [for (final e in lines.entries) '${e.key}: ${e.value}'].join('\n'),
+      'The shopping list has these products: ${known.join('; ')}.',
+      'For every line say which product of the list it is, or null. A wrong match is '
+          'much worse than none: answer null when the printed text is abbreviated, '
+          'garbled or not clearly that product. Many products are look-alikes of each '
+          'other (flavours, sizes): pick one only when the text tells which. Before '
+          '"match" copy into "evidence" the exact words of the line that name the '
+          'product; no evidence, no match. The receipt may be printed in another '
+          'language than the list: translate first.',
+    ].join(' ');
+  }
+
+  /// The matches of the second reader: only for the lines that were asked, only a name
+  /// of the catalog (in its own spelling), and only with evidence that is really in the
+  /// printed line; anything else is "none".
+  static Map<int, String?> parseMatcher(
+    String text,
+    Map<int, String> asked,
+    List<String> knownNames,
+  ) {
+    final result = <int, String?>{for (final i in asked.keys) i: null};
+    final Object? json;
+    try {
+      json = jsonDecode(text);
+    } catch (_) {
+      return result;
+    }
+    final list = json is Map ? json['matches'] : null;
+    if (list is! List) return result;
+    for (final item in list) {
+      if (item is! Map) continue;
+      final index = item['index'];
+      if (index is! int || !asked.containsKey(index)) continue;
+      final name = item['match'];
+      if (name is! String) continue;
+      final known = knownNames.where((n) => ProductNames.same(n, name));
+      if (known.isEmpty) continue;
+      if (!_evidenceIn(item['evidence'], asked[index]!)) continue;
+      result[index] = known.first;
+    }
+    return result;
+  }
+
+  /// Are the quoted words really in the printed line (any case, no accents)?
+  static bool _evidenceIn(Object? evidence, String raw) {
+    if (evidence is! String) return false;
+    final quote = foldText(evidence.trim().replaceAll(RegExp(r'\s+'), ' '));
+    return quote.length >= 2 &&
+        foldText(raw.replaceAll(RegExp(r'\s+'), ' ')).contains(quote);
   }
 
   static String prompt(String language, List<String> knownNames) {
@@ -148,8 +310,15 @@ class ReceiptParsingRepository {
           'is the shop name; null when not printed.',
       if (known.isNotEmpty)
         'The shopping list has these products: ${known.join('; ')}. For an item that '
-            'is one of them set "match" to that exact name; otherwise null. Never '
-            'invent a match.'
+            'clearly is one of them set "match" to that exact name; otherwise null. '
+            'Never invent a match: a wrong match is much worse than none, so when the '
+            'printed text is abbreviated, garbled or you are not sure, "match" is null. '
+            'Fill "evidence" first: the exact word or words copied from "raw" that name '
+            'the product, and "meaning": their short reading in the language of the '
+            'list ("jaja = яйця"); no evidence, no match. "confidence" is "high" only '
+            'when the evidence names the product itself. Many products of the list are '
+            'look-alikes of each other (flavours, sizes): pick one only when the '
+            'printed text tells which.'
       else
         'The shopping list has no products yet: "match" is always null.',
       'For an item with no match set "name" to a short name for the shopping list: '
@@ -206,6 +375,13 @@ class ReceiptParsingRepository {
           }
         }
       }
+      final highConfidence = match != null && item['confidence'] == 'high';
+      final evidenceOk =
+          match != null && _evidenceIn(item['evidence'], printed);
+      final meaningRaw = item['meaning'];
+      final meaning = match != null && meaningRaw is String
+          ? clip(ProductNames.normalize(meaningRaw), 80)
+          : '';
       String? name;
       if (isItem && match == null) {
         final proposed = item['name'] is String
@@ -247,6 +423,11 @@ class ReceiptParsingRepository {
           amount: isItem ? _amount(item) : Amount.none,
           price: price,
           discount: discount,
+          // Only a candidate until `decideMatches` has weighed it.
+          tier: match == null ? MatchTier.none : MatchTier.check,
+          highConfidence: highConfidence,
+          evidenceOk: evidenceOk,
+          meaning: meaning.isEmpty ? null : meaning,
         ),
       );
     }
@@ -271,12 +452,7 @@ class ReceiptParsingRepository {
         if (item != null &&
             item.price != null &&
             amount.minor <= item.price!.minor) {
-          lines[t!] = ReceiptLine(
-            raw: item.raw,
-            kind: item.kind,
-            match: item.match,
-            name: item.name,
-            amount: item.amount,
+          lines[t!] = item.withMoney(
             price: item.price!.copyWith(
               minor: item.price!.minor - amount.minor,
             ),
