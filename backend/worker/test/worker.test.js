@@ -257,6 +257,9 @@ test('the push names the amounts: x2, 1.5 kg, both; bare marks and bad values ad
   assert.equal(amountLabel({ at: new Date(), g: 1500 }), '1.5 kg');
   assert.equal(amountLabel({ at: new Date(), g: 500 }), '500 g');
   assert.equal(amountLabel({ at: new Date(), count: 2, ml: 1500 }), 'x2 1.5 l');
+  // money inside the mark never reaches the push text
+  assert.equal(amountLabel({ at: new Date(), count: 2, price: { minor: 3290, cur: 'UAH' }, discount: { minor: 1, cur: 'UAH' } }), 'x2');
+  assert.equal(amountLabel({ at: new Date(), price: { minor: 3290, cur: 'UAH' } }), '');
   assert.equal(amountLabel({ at: new Date(), ml: 250 }), '250 ml');
   assert.equal(amountLabel(new Date()), '');
   assert.equal(amountLabel(undefined), '');

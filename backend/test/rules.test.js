@@ -598,6 +598,21 @@ describe('trips', () => {
     await assertSucceeds(updateDoc(d, { autoSendAt: Timestamp.fromMillis(Date.now() + 3600_000) }));
   });
 
+  // Step 67: prices live inside the mark map, receipts are a short list on the trip.
+  it('marks may carry a price and a discount, receipts are a list of at most 5', async () => {
+    const d = doc(as('alice'), 'groups/g1/trips/t-alice');
+    const price = { minor: 3290, cur: 'UAH' };
+    await assertSucceeds(updateDoc(d, { 'marks.bread': { at: Timestamp.now(), price, discount: { minor: 100, cur: 'UAH' } } }));
+    await assertSucceeds(updateDoc(d, { receipts: [{ store: 'Shop', date: Timestamp.now(), total: price }] }));
+    await assertSucceeds(updateDoc(d, { receipts: [1, 2, 3, 4, 5].map(() => ({ total: price })) }));
+    await assertFails(updateDoc(d, { receipts: [1, 2, 3, 4, 5, 6].map(() => ({ total: price })) }));
+    await assertFails(updateDoc(d, { receipts: 'x' }));
+    const db = as('bob');
+    const trip = { userId: 'bob', startedAt: serverTimestamp(), marks: { milk: Timestamp.now() }, open: true };
+    await assertSucceeds(setDoc(doc(db, 'groups/g1/trips/t-r'), { ...trip, receipts: [{ total: price }] }));
+    await assertFails(setDoc(doc(db, 'groups/g1/trips/t-r2'), { ...trip, receipts: 7 }));
+  });
+
   it('nobody else writes a member\'s trip', async () => {
     await assertFails(updateDoc(doc(as('bob'), 'groups/g1/trips/t-alice'), { 'marks.bread': Timestamp.now() }));
     await assertFails(updateDoc(doc(as('carol'), 'groups/g1/trips/t-alice'), { 'marks.bread': Timestamp.now() }));

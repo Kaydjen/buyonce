@@ -28,7 +28,11 @@ async function seed() {
     open: false,
     sentAt: new Date(),
     autoSendAt: new Date(Date.now() - 1000),
-    marks: { p1: { at: new Date(), count: 2, ml: 1500 }, p2: new Date() },
+    marks: {
+      p1: { at: new Date(), count: 2, ml: 1500, price: { minor: 3290, cur: 'UAH' }, discount: { minor: 100, cur: 'UAH' } },
+      p2: new Date(),
+    },
+    receipts: [{ store: 'Shop', total: { minor: 3290, cur: 'UAH' } }],
   });
 }
 

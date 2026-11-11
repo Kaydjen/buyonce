@@ -8,9 +8,11 @@ import '../../domain/models/amount.dart';
 import '../../domain/models/notice.dart';
 import '../../domain/models/plan.dart';
 import '../../domain/models/product.dart';
+import '../../domain/models/receipt.dart';
 import '../../domain/models/trip.dart';
 import '../../domain/models/trip_mark.dart';
 import 'amount_codec.dart';
+import 'money_codec.dart';
 import 'list_service.dart';
 import 'send_worker.dart';
 
@@ -60,20 +62,55 @@ Trip tripFromData(String groupId, String id, Doc data) {
           // An old mark is the bare time; one with an amount is a map {at, count, g, ml}.
           markedAt: _time(e.value is Map ? (e.value as Map)['at'] : e.value),
           amount: amountFromData(e.value),
+          price: e.value is Map ? moneyFromData((e.value as Map)['price']) : null,
+          discount: e.value is Map
+              ? moneyFromData((e.value as Map)['discount'])
+              : null,
         ),
     ]..sort((a, b) => a.markedAt.compareTo(b.markedAt)),
     sentAt: data['sentAt'] == null ? null : _time(data['sentAt']),
     autoSendAt: data['autoSendAt'] == null ? null : _time(data['autoSendAt']),
+    receipts: receiptsFromData(data['receipts']),
   );
 }
 
-/// `marks.<productId>` = when the product was taken: the bare time while no amount is
-/// set (so a phone with an older version still reads it), else a map `{at, count, g, ml}`.
+/// `receipts` = a list of maps `{store, date, total, discount}`, every key optional;
+/// an unreadable entry is skipped.
+List<Receipt> receiptsFromData(Object? data) => [
+  if (data is List)
+    for (final r in data)
+      if (r is Map)
+        Receipt(
+          store: r['store'] is String ? r['store'] as String : null,
+          date: r['date'] == null ? null : _time(r['date']),
+          total: moneyFromData(r['total']),
+          discount: moneyFromData(r['discount']),
+        ),
+];
+
+List<Map<String, Object>> receiptsToData(List<Receipt> receipts) => [
+  for (final r in receipts)
+    {
+      if (r.store != null) 'store': r.store!,
+      if (r.date != null) 'date': Timestamp.fromDate(r.date!),
+      if (r.total != null) 'total': moneyToData(r.total!),
+      if (r.discount != null) 'discount': moneyToData(r.discount!),
+    },
+];
+
+/// `marks.<productId>` = when the product was taken: the bare time while nothing else
+/// is known (so a phone with an older version still reads it), else a map
+/// `{at, count, g, ml, price, discount}` with only the known parts.
 Map<String, Object> marksToData(List<TripMark> marks) => {
   for (final m in marks)
-    m.productId: m.amount.isNone
+    m.productId: m.amount.isNone && m.price == null && m.discount == null
         ? Timestamp.fromDate(m.markedAt)
-        : {'at': Timestamp.fromDate(m.markedAt), ...amountToData(m.amount)},
+        : {
+            'at': Timestamp.fromDate(m.markedAt),
+            ...amountToData(m.amount),
+            if (m.price != null) 'price': moneyToData(m.price!),
+            if (m.discount != null) 'discount': moneyToData(m.discount!),
+          },
 };
 
 Plan planFromData(String groupId, String id, Doc data) => Plan(
@@ -499,6 +536,7 @@ class FirebaseListService implements ListService {
         'userId': trip.userId,
         'startedAt': FieldValue.serverTimestamp(),
         'marks': marksToData(trip.marks),
+        if (trip.receipts.isNotEmpty) 'receipts': receiptsToData(trip.receipts),
         'open': true,
         if (trip.autoSendAt != null)
           'autoSendAt': Timestamp.fromDate(trip.autoSendAt!),
@@ -513,7 +551,10 @@ class FirebaseListService implements ListService {
       _col(
         trip.groupId,
         'trips',
-      ).doc(trip.id).update({'marks': marksToData(trip.marks)}),
+      ).doc(trip.id).update({
+        'marks': marksToData(trip.marks),
+        if (trip.receipts.isNotEmpty) 'receipts': receiptsToData(trip.receipts),
+      }),
     );
     return const Ok<void>(null);
   }

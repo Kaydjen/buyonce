@@ -1,6 +1,8 @@
 import '../../domain/models/plan.dart';
 import 'amount_codec.dart';
+import 'money_codec.dart';
 import '../../domain/models/product.dart';
+import '../../domain/models/receipt.dart';
 import '../../domain/models/trip.dart';
 import '../../domain/models/trip_mark.dart';
 
@@ -103,8 +105,20 @@ class ListSnapshot {
           'userId': m.userId,
           'markedAt': _time(m.markedAt),
           if (!m.amount.isNone) 'amount': amountToData(m.amount),
+          if (m.price != null) 'price': moneyToData(m.price!),
+          if (m.discount != null) 'discount': moneyToData(m.discount!),
         },
     ],
+    if (t.receipts.isNotEmpty)
+      'receipts': [
+        for (final r in t.receipts)
+          {
+            if (r.store != null) 'store': r.store,
+            if (r.date != null) 'date': _time(r.date),
+            if (r.total != null) 'total': moneyToData(r.total!),
+            if (r.discount != null) 'discount': moneyToData(r.discount!),
+          },
+      ],
   };
 
   static Trip _parseTrip(Map m) => Trip(
@@ -121,7 +135,20 @@ class ListSnapshot {
           userId: x['userId'] as String,
           markedAt: _parseTime(x['markedAt'])!,
           amount: amountFromData(x['amount']),
+          price: moneyFromData(x['price']),
+          discount: moneyFromData(x['discount']),
         ),
+    ],
+    receipts: [
+      if (m['receipts'] is List)
+        for (final r in m['receipts'] as List)
+          if (r is Map)
+            Receipt(
+              store: r['store'] is String ? r['store'] as String : null,
+              date: _parseTime(r['date']),
+              total: moneyFromData(r['total']),
+              discount: moneyFromData(r['discount']),
+            ),
     ],
   );
 }
