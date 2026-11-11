@@ -23,10 +23,11 @@ void main() {
 
   for (final variant in [StyleVariant.d7]) {
     testWidgets(
-      '${variant.name}: the Plan button fades in, the menu keeps its place',
+      '${variant.name}: the Plan button fades in over the scan icon, the menu keeps its place',
       (tester) async {
         await _pump(tester, variant);
         expect(find.byKey(const Key('addProducts')), findsNothing);
+        expect(find.byKey(const Key('scanReceipt')), findsOneWidget);
         final menuShop = tester.getCenter(find.byKey(const Key('menuButton')));
 
         await tester.tap(find.byKey(const Key('tabPlan')));
@@ -34,10 +35,10 @@ void main() {
         await tester.pump(const Duration(milliseconds: 60));
         final add = find.byKey(const Key('addProducts'));
         expect(add, findsOneWidget);
-        final opacity = tester.widget<Opacity>(
-          find.ancestor(of: add, matching: find.byType(Opacity)).first,
+        final fade = tester.widget<FadeTransition>(
+          find.ancestor(of: add, matching: find.byType(FadeTransition)).first,
         );
-        expect(opacity.opacity, inExclusiveRange(0, 1), reason: 'mid-fade');
+        expect(fade.opacity.value, inExclusiveRange(0, 1), reason: 'mid-fade');
 
         await tester.pumpAndSettle();
         expect(
@@ -48,6 +49,7 @@ void main() {
         await tester.tap(find.byKey(const Key('tabShop')));
         await tester.pumpAndSettle();
         expect(add, findsNothing);
+        expect(find.byKey(const Key('scanReceipt')), findsOneWidget);
       },
     );
   }

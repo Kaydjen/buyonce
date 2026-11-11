@@ -20,6 +20,8 @@ class TopBar extends StatelessWidget {
     required this.onGroupLongPress,
     required this.onAdd,
     required this.menu,
+    this.onScan,
+    this.scanBusy = false,
     this.statusKey,
     this.hideStatus = false,
     this.offline = false,
@@ -36,6 +38,12 @@ class TopBar extends StatelessWidget {
   /// Opens "add products"; null in Shop.
   final VoidCallback? onAdd;
   final Widget menu;
+
+  /// Scans a receipt; in Shop only, in the place Plan gives to "add".
+  final VoidCallback? onScan;
+
+  /// A receipt is being read: the scan icon is a small spinner meanwhile.
+  final bool scanBusy;
 
   /// Lets the list measure the status.
   final Key? statusKey;
@@ -78,21 +86,27 @@ class TopBar extends StatelessWidget {
           if (t.bigHeader)
             // Shop keeps the place of the button, so a tab switch moves nothing.
             FadeSlot(
-              show: onAdd != null,
+              show: onAdd != null || onScan != null,
               space: t.depth > 0 ? 52 : 48,
-              child: t.depth > 0
-                  ? RaisedIcon(
-                      key: const Key('addProducts'),
-                      label: context.l10n.addProductsTitle,
-                      onPressed: onAdd,
-                      child: const Icon(Icons.add),
-                    )
-                  : IconButton(
-                      key: const Key('addProducts'),
-                      tooltip: context.l10n.addProductsTitle,
-                      onPressed: onAdd,
-                      icon: const Icon(Icons.add),
-                    ),
+              // Plan's "add" and Shop's "scan" take turns in one place with a fade.
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: onAdd == null && onScan != null
+                    ? _scan(context, t.depth > 0)
+                    : t.depth > 0
+                    ? RaisedIcon(
+                        key: const Key('addProducts'),
+                        label: context.l10n.addProductsTitle,
+                        onPressed: onAdd,
+                        child: const Icon(Icons.add),
+                      )
+                    : IconButton(
+                        key: const Key('addProducts'),
+                        tooltip: context.l10n.addProductsTitle,
+                        onPressed: onAdd,
+                        icon: const Icon(Icons.add),
+                      ),
+              ),
             )
           else if (onAdd != null)
             TextButton(
@@ -100,12 +114,45 @@ class TopBar extends StatelessWidget {
               onPressed: onAdd,
               style: headerButtonStyle(context),
               child: Text(context.l10n.add),
-            ),
+            )
+          else if (onScan != null)
+            _scan(context, false),
           if (offline) const _OfflineSign(),
           menu,
         ],
       ),
     );
+  }
+
+  /// The receipt icon of Shop; a spinner while a receipt is being read.
+  Widget _scan(BuildContext context, bool raised) {
+    final label = context.l10n.scanReceiptTooltip;
+    if (scanBusy) {
+      return SizedBox(
+        key: const Key('scanBusy'),
+        width: raised ? 52 : 48,
+        child: const Center(
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+    return raised
+        ? RaisedIcon(
+            key: const Key('scanReceipt'),
+            label: label,
+            onPressed: onScan,
+            child: const Icon(Icons.receipt_long_outlined),
+          )
+        : IconButton(
+            key: const Key('scanReceipt'),
+            tooltip: label,
+            onPressed: onScan,
+            icon: const Icon(Icons.receipt_long_outlined),
+          );
   }
 
   Widget _heading(BuildContext context, bool status) {

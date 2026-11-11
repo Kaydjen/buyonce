@@ -19,6 +19,7 @@ import '../view_models/groups/groups_view_model.dart';
 import '../view_models/list/list_state.dart';
 import '../view_models/list/list_view_model.dart';
 import '../view_models/list/sync_state.dart';
+import '../view_models/receipt/receipt_scan_view_model.dart';
 import '../view_models/session/session.dart';
 import '../view_models/update/update_view_model.dart';
 import '../view_models/users/user_names_view_model.dart';
@@ -54,6 +55,7 @@ import 'add_products_screen.dart';
 import 'archive_screen.dart';
 import 'group_screen.dart';
 import 'history_screen.dart';
+import 'receipt_scan_flow.dart';
 import 'settings_screen.dart';
 
 class ListScreen extends ConsumerStatefulWidget {
@@ -629,6 +631,10 @@ class _ListScreenState extends ConsumerState<ListScreen>
       writeFailuresProvider,
       (_, _) => showToast(context, context.l10n.couldntSave),
     );
+    // A receipt that could not be read: the toast offers the way on.
+    ref.listen(receiptScanProvider.select((s) => s.problem), (_, problem) {
+      if (problem != null) showReceiptProblem(context, ref, problem);
+    });
     // Another group became active (push tap, removal): the old search is gone.
     ref.listen(activeGroupIdProvider, (_, _) {
       _search.clear();
@@ -1115,6 +1121,10 @@ class _ListScreenState extends ConsumerState<ListScreen>
           onGroup: _switchGroup,
           onGroupLongPress: kDebugMode ? () => _debugUser(s.userId) : null,
           onAdd: shop ? null : _addProducts,
+          onScan: shop
+              ? () => startReceiptScan(context, ref)
+              : null,
+          scanBusy: ref.watch(receiptScanProvider.select((s) => s.busy)),
           offline: ref.watch(offlineProvider),
           menu: _menu(s, menuLabel),
         ),

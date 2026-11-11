@@ -483,6 +483,23 @@ class AppLocalizationsUk extends AppLocalizations {
   String get couldntNameItem => 'Не вдалося назвати предмет';
 
   @override
+  String get scanReceiptTooltip => 'Сканувати чек';
+
+  @override
+  String receiptPhotosTitle(int count) {
+    return 'Фото: $count';
+  }
+
+  @override
+  String get addPhoto => 'Додати фото';
+
+  @override
+  String get readReceipt => 'Прочитати';
+
+  @override
+  String get couldntReadReceipt => 'Не вдалося прочитати чек';
+
+  @override
   String get models => 'Моделі';
 
   @override

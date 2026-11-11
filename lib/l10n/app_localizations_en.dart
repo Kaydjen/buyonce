@@ -481,6 +481,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String get couldntNameItem => 'Couldn\'t name this item';
 
   @override
+  String get scanReceiptTooltip => 'Scan receipt';
+
+  @override
+  String receiptPhotosTitle(int count) {
+    return 'Photos: $count';
+  }
+
+  @override
+  String get addPhoto => 'Add photo';
+
+  @override
+  String get readReceipt => 'Read';
+
+  @override
+  String get couldntReadReceipt => 'Couldn\'t read this receipt';
+
+  @override
   String get models => 'Models';
 
   @override

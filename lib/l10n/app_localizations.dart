@@ -914,6 +914,36 @@ abstract class AppLocalizations {
   /// **'Couldn\'t name this item'**
   String get couldntNameItem;
 
+  /// No description provided for @scanReceiptTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan receipt'**
+  String get scanReceiptTooltip;
+
+  /// No description provided for @receiptPhotosTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Photos: {count}'**
+  String receiptPhotosTitle(int count);
+
+  /// No description provided for @addPhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Add photo'**
+  String get addPhoto;
+
+  /// No description provided for @readReceipt.
+  ///
+  /// In en, this message translates to:
+  /// **'Read'**
+  String get readReceipt;
+
+  /// No description provided for @couldntReadReceipt.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t read this receipt'**
+  String get couldntReadReceipt;
+
   /// No description provided for @models.
   ///
   /// In en, this message translates to:

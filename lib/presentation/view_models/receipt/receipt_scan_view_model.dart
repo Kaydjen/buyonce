@@ -75,15 +75,6 @@ class ReceiptScanViewModel extends Notifier<ReceiptScanState> {
     }
   }
 
-  /// A photo taken before Android killed the app is not wasted.
-  Future<bool> recoverLost() async {
-    final lost = await ref.read(photoServiceProvider).recoverLostPhoto();
-    if (!ref.mounted || lost == null || !state.canAddPhoto) return false;
-    _photos.add(lost);
-    state = ReceiptScanState(photos: _photos.length);
-    return true;
-  }
-
   /// Reads the photos taken so far and opens the review. [language] is the English name
   /// of the app language; [fallbackCurrency] an ISO code for a receipt that shows none.
   /// On success the photos are dropped; on a problem they stay for a retry.

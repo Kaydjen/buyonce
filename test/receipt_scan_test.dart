@@ -134,18 +134,10 @@ void main() {
     expect(scan.reviewReady, isTrue);
   });
 
-  test('reset drops the photos; a lost photo is taken back', () async {
-    final camera = ScriptedPhotoService([_jpeg], lost: _jpeg);
-    await GeminiKeyService().write('key-1');
-    final c = ProviderContainer(
-      overrides: [
-        photoServiceProvider.overrideWithValue(camera),
-        listViewModelProvider.overrideWith(_FakeList.new),
-      ],
-    );
-    addTearDown(c.dispose);
+  test('reset drops the photos', () async {
+    final (c, _, _) = await _rig();
     final vm = c.read(receiptScanProvider.notifier);
-    expect(await vm.recoverLost(), isTrue);
+    await vm.addPhoto();
     expect(c.read(receiptScanProvider).photos, 1);
     vm.reset();
     expect(c.read(receiptScanProvider).photos, 0);
