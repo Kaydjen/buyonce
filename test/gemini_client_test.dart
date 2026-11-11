@@ -17,7 +17,7 @@ const _b = 'model-b';
 final _request = GeminiRequest(
   prompt: 'Name the item',
   schema: const {'type': 'OBJECT'},
-  image: Uint8List.fromList([1, 2, 3]),
+  images: [Uint8List.fromList([1, 2, 3])],
 );
 
 /// A client over a script; [script] answers by model.

@@ -64,7 +64,7 @@ class NameSuggestionRepository {
       GeminiRequest(
         prompt: prompt(language, knownNames),
         schema: schema,
-        image: photo,
+        images: [photo],
       ),
       models,
     );
@@ -113,9 +113,7 @@ class NameSuggestionRepository {
     final names = <String>[];
     for (final item in raw) {
       if (item is! String) continue;
-      var name = ProductNames.normalize(item)
-          .replaceAll(RegExp(r'[.,;:!]+$'), '');
-      name = _unshout(name);
+      final name = cleanName(item);
       if (name.isEmpty || names.any((n) => ProductNames.same(n, name))) {
         continue;
       }
@@ -124,6 +122,12 @@ class NameSuggestionRepository {
     }
     return names;
   }
+
+  /// A name as the model wrote it, made fit for the list: spaces and the product limit
+  /// ([ProductNames.normalize]), no closing punctuation, sentence case when it shouted.
+  static String cleanName(String raw) => _unshout(
+    ProductNames.normalize(raw).replaceAll(RegExp(r'[.,;:!]+$'), ''),
+  );
 
   /// "ZIEMNIAKI" -> "Ziemniaki": a name of four or more letters with no lower-case letter is lowered and
   /// its first letter raised. Mixed case ("tołpa", "Piątnica Skyr") stays as it is.

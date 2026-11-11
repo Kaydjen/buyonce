@@ -9,14 +9,19 @@ import '../../domain/models/gemini_outcome.dart';
 import '../services/gemini_api.dart';
 import '../services/gemini_key_service.dart';
 
-/// One question for the model: a prompt, an optional JPEG and the JSON shape of the answer.
+/// One question for the model: a prompt, optional JPEGs (one item photo, or the parts of
+/// one receipt) and the JSON shape of the answer.
 class GeminiRequest {
-  const GeminiRequest({required this.prompt, required this.schema, this.image});
+  const GeminiRequest({
+    required this.prompt,
+    required this.schema,
+    this.images = const [],
+  });
   final String prompt;
 
   /// Gemini's schema (`type`, `properties`, ...) of the JSON the answer must have.
   final Map<String, Object?> schema;
-  final Uint8List? image;
+  final List<Uint8List> images;
 }
 
 /// What the client knows about one model since the key or the list last changed.
@@ -127,7 +132,7 @@ class GeminiClient {
       _lastModels = ids;
     }
 
-    final hasImage = request.image != null;
+    final hasImage = request.images.isNotEmpty;
     final start = _now();
     var live = 0;
     final limits = <(String, LimitScope, Duration?)>[];
@@ -267,7 +272,7 @@ class GeminiClient {
             text.contains('schema') ||
             text.contains('mime');
         if (!aboutRequestShape &&
-            request.image != null &&
+            request.images.isNotEmpty &&
             (text.contains('image') || text.contains('media'))) {
           health.noImages = true;
           return const _Dead();
@@ -291,11 +296,11 @@ class GeminiClient {
         {
           'parts': [
             {'text': prompt},
-            if (request.image != null)
+            for (final image in request.images)
               {
                 'inlineData': {
                   'mimeType': 'image/jpeg',
-                  'data': base64Encode(request.image!),
+                  'data': base64Encode(image),
                 },
               },
           ],
