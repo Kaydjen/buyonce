@@ -2,6 +2,7 @@ import 'amount.dart';
 import 'money.dart';
 import 'product.dart';
 import 'product_names.dart';
+import 'receipt.dart';
 import 'receipt_reading.dart';
 
 /// One row of the review screen: a product the receipt line(s) stand for. A row with a
@@ -101,6 +102,8 @@ class ReceiptReview {
     this.skipped = 0,
     this.store,
     this.date,
+    this.total,
+    this.discount,
     this.pricesMayBeWrong = false,
   });
 
@@ -125,6 +128,8 @@ class ReceiptReview {
           .length,
       store: reading.store,
       date: reading.date,
+      total: reading.total,
+      discount: reading.discount,
       pricesMayBeWrong: reading.linesMatchTotal == false,
     );
     var next = 0;
@@ -158,6 +163,10 @@ class ReceiptReview {
   final String? store;
   final DateTime? date;
 
+  /// The printed total and the receipt-wide discount, kept for the trip's record.
+  final Money? total;
+  final Money? discount;
+
   /// The lines do not add up to the printed total: the screen says so without amounts.
   final bool pricesMayBeWrong;
 
@@ -177,6 +186,17 @@ class ReceiptReview {
   ];
 
   int get checkedCount => chosen.length;
+
+  /// What the trip keeps about this receipt; null when the receipt told nothing.
+  Receipt? get receipt {
+    final r = Receipt(
+      store: store,
+      date: date,
+      total: total,
+      discount: discount,
+    );
+    return r == const Receipt() ? null : r;
+  }
 
   ReviewRow? row(String id) {
     for (final r in rows) {
@@ -265,6 +285,8 @@ class ReceiptReview {
     skipped: skipped,
     store: store,
     date: date,
+    total: total,
+    discount: discount,
     pricesMayBeWrong: pricesMayBeWrong,
   );
 

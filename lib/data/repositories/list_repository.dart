@@ -11,6 +11,8 @@ import '../../domain/models/plan.dart';
 import '../../domain/models/product.dart';
 import '../../domain/models/product_names.dart';
 import '../../domain/models/purchase.dart';
+import '../../domain/models/receipt.dart';
+import '../../domain/models/receipt_review.dart';
 import '../../domain/models/sort_key.dart';
 import '../../domain/models/trip.dart';
 import '../../domain/models/trip_mark.dart';
@@ -513,6 +515,107 @@ class ListRepository {
       return _saveTrip(open, trip.copyWith(marks: marks));
     }),
   );
+
+  /// "Mark N" of a scanned receipt: for each chosen row the product (a new one is
+  /// created, not planned, on top; a product deleted meanwhile comes back by its name)
+  /// gets MY mark in my open trip with the row's amount, price and discount, in ONE
+  /// write together with the receipt record. A product I already marked keeps its mark
+  /// and takes what the receipt knows (an amount only when the receipt has one); a
+  /// product the partner marked is skipped (their mark is read-only). Returns how many
+  /// rows were marked.
+  Future<Result<int>> applyReceipt(
+    List<ReviewRow> rows,
+    Receipt? receipt,
+    String userId,
+  ) async {
+    final loaded = await _service.getProducts(groupId);
+    if (loaded case Failure(:final error)) return Failure(error);
+    final trips = await _service.getOpenTrips(groupId);
+    if (trips case Failure(:final error)) return Failure(error);
+    final all = (loaded as Ok<List<Product>>).value;
+    final openTrips = (trips as Ok<List<Trip>>).value;
+    final open = openTrips.where((t) => t.userId == userId).firstOrNull;
+    final partnerMarked = {
+      for (final t in openTrips)
+        if (t.userId != userId)
+          for (final m in t.marks) m.productId,
+    };
+    final active = {
+      for (final p in all)
+        if (!p.deleted) p.id: p,
+    };
+
+    // The product of every row, in row order; new ones are created last-to-first so the
+    // first row ends on top.
+    final ids = List<String?>.filled(rows.length, null);
+    for (var i = rows.length - 1; i >= 0; i--) {
+      final row = rows[i];
+      final known = row.product == null ? null : active[row.product!.id];
+      if (known != null) {
+        ids[i] = known.id;
+        continue;
+      }
+      // A new row, or a product that is gone: an active product of that name wins.
+      final sameName = active.values
+          .where((p) => ProductNames.same(p.name, row.name))
+          .firstOrNull;
+      if (sameName != null) {
+        ids[i] = sameName.id;
+        continue;
+      }
+      final created = await addProduct(
+        row.name,
+        planned: false,
+        atStart: true,
+        userId: userId,
+      );
+      switch (created) {
+        case Ok(:final value):
+          ids[i] = value.id;
+          active[value.id] = value;
+        case Failure(:final error):
+          return Failure(error);
+      }
+    }
+
+    final needs = {for (final p in active.values) p.id: p.need};
+    final now = DateTime.now();
+    var trip =
+        open ??
+        Trip(id: newId(), groupId: groupId, userId: userId, startedAt: now);
+    var marks = [...trip.marks];
+    var count = 0;
+    for (var i = 0; i < rows.length; i++) {
+      final id = ids[i]!;
+      final row = rows[i];
+      final index = marks.indexWhere((m) => m.productId == id);
+      if (index < 0 && partnerMarked.contains(id)) continue;
+      if (index >= 0) {
+        marks[index] = marks[index].copyWith(
+          amount: row.amount.isNone ? null : row.amount,
+          price: row.price,
+          discount: row.discount,
+        );
+      } else {
+        marks.add(
+          TripMark(
+            productId: id,
+            userId: userId,
+            markedAt: now,
+            amount: row.amount.isNone ? needs[id] ?? Amount.none : row.amount,
+            price: row.price,
+            discount: row.discount,
+          ),
+        );
+      }
+      count++;
+    }
+    if (count == 0) return const Ok(0);
+    trip = trip.copyWith(marks: marks, receipts: [...trip.receipts, ?receipt]);
+    final saved = await _saveTrip(open, trip);
+    if (saved case Failure(:final error)) return Failure(error);
+    return Ok(count);
+  }
 
   /// Sets how much of [product] is wanted. A product I have marked changes its mark in
   /// my open trip; any other product gets the amount as its need (and becomes needed,

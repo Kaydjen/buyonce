@@ -163,8 +163,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String markedCount(int n) {
-    return 'Marked: $n';
+  String markedCount(int count) {
+    return 'Marked: $count';
   }
 
   @override
@@ -496,6 +496,31 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get couldntReadReceipt => 'Couldn\'t read this receipt';
+
+  @override
+  String get receiptTitle => 'Receipt';
+
+  @override
+  String get receiptFound => 'Found';
+
+  @override
+  String receiptSkipped(int count) {
+    return 'Skipped: $count';
+  }
+
+  @override
+  String get selectAllNew => 'Select all';
+
+  @override
+  String markCount(int count) {
+    return 'Mark $count';
+  }
+
+  @override
+  String get pricesMayBeMisread => 'Prices may be misread';
+
+  @override
+  String get newProduct => 'New product';
 
   @override
   String get models => 'Models';

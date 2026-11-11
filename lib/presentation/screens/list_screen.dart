@@ -19,6 +19,7 @@ import '../view_models/groups/groups_view_model.dart';
 import '../view_models/list/list_state.dart';
 import '../view_models/list/list_view_model.dart';
 import '../view_models/list/sync_state.dart';
+import '../view_models/receipt/receipt_review_view_model.dart';
 import '../view_models/receipt/receipt_scan_view_model.dart';
 import '../view_models/session/session.dart';
 import '../view_models/update/update_view_model.dart';
@@ -55,6 +56,7 @@ import 'add_products_screen.dart';
 import 'archive_screen.dart';
 import 'group_screen.dart';
 import 'history_screen.dart';
+import 'receipt_review_screen.dart';
 import 'receipt_scan_flow.dart';
 import 'settings_screen.dart';
 
@@ -634,6 +636,10 @@ class _ListScreenState extends ConsumerState<ListScreen>
     // A receipt that could not be read: the toast offers the way on.
     ref.listen(receiptScanProvider.select((s) => s.problem), (_, problem) {
       if (problem != null) showReceiptProblem(context, ref, problem);
+    });
+    // A receipt was read: its review opens.
+    ref.listen(receiptScanProvider.select((s) => s.reviewReady), (_, ready) {
+      if (ready) _openReceiptReview();
     });
     // Another group became active (push tap, removal): the old search is gone.
     ref.listen(activeGroupIdProvider, (_, _) {
@@ -1233,6 +1239,23 @@ class _ListScreenState extends ConsumerState<ListScreen>
     _menuEntry?.remove();
     _menuEntry = null;
     if (_menuId != null && mounted) setState(() => _menuId = null);
+  }
+
+  /// The review of a scanned receipt; leaving it drops the review, "Mark N" has written
+  /// the marks by then.
+  Future<void> _openReceiptReview() async {
+    ref.read(receiptScanProvider.notifier).reviewShown();
+    final marked = await Navigator.of(context).push<int>(
+      MaterialPageRoute(builder: (_) => const ReceiptReviewScreen()),
+    );
+    ref.read(receiptReviewProvider.notifier).discard();
+    if (marked != null && marked > 0 && mounted) {
+      showToast(
+        context,
+        context.l10n.markedCount(marked),
+        duration: const Duration(seconds: 2),
+      );
+    }
   }
 
   Future<void> _renameProduct(Product p) async {

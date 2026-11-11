@@ -371,8 +371,8 @@ abstract class AppLocalizations {
   /// No description provided for @markedCount.
   ///
   /// In en, this message translates to:
-  /// **'Marked: {n}'**
-  String markedCount(int n);
+  /// **'Marked: {count}'**
+  String markedCount(int count);
 
   /// No description provided for @sentCount.
   ///
@@ -943,6 +943,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t read this receipt'**
   String get couldntReadReceipt;
+
+  /// No description provided for @receiptTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt'**
+  String get receiptTitle;
+
+  /// No description provided for @receiptFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Found'**
+  String get receiptFound;
+
+  /// No description provided for @receiptSkipped.
+  ///
+  /// In en, this message translates to:
+  /// **'Skipped: {count}'**
+  String receiptSkipped(int count);
+
+  /// No description provided for @selectAllNew.
+  ///
+  /// In en, this message translates to:
+  /// **'Select all'**
+  String get selectAllNew;
+
+  /// No description provided for @markCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark {count}'**
+  String markCount(int count);
+
+  /// No description provided for @pricesMayBeMisread.
+  ///
+  /// In en, this message translates to:
+  /// **'Prices may be misread'**
+  String get pricesMayBeMisread;
+
+  /// No description provided for @newProduct.
+  ///
+  /// In en, this message translates to:
+  /// **'New product'**
+  String get newProduct;
 
   /// No description provided for @models.
   ///

@@ -8,6 +8,7 @@ import '../../../domain/models/amount.dart';
 import '../../../domain/models/notice.dart';
 import '../../../domain/models/plan.dart';
 import '../../../domain/models/product.dart';
+import '../../../domain/models/receipt_review.dart';
 import '../../../domain/models/product_names.dart';
 import '../../../domain/models/sort_key.dart';
 import '../../../domain/models/trip.dart';
@@ -383,6 +384,25 @@ class ListViewModel extends AsyncNotifier<ListState> {
     await _apply((repo) => repo.setMarks(ids, userId, marked: true));
     _restartIdleTimer(userId, hasMarks: true);
     return ids;
+  }
+
+  /// "Mark N" of a scanned receipt: the checked rows become my marks (new products are
+  /// created) and the receipt joins my open trip. A mark restarts the auto-send timer
+  /// like any other. Returns how many products were marked.
+  Future<int> applyReceipt(ReceiptReview review) async {
+    final userId = ref.read(currentUserIdProvider);
+    var marked = 0;
+    await _apply((repo) async {
+      final result = await repo.applyReceipt(
+        review.chosen,
+        review.receipt,
+        userId,
+      );
+      if (result case Ok(:final value)) marked = value;
+      return result;
+    });
+    if (marked > 0) _restartIdleTimer(userId, hasMarks: true);
+    return marked;
   }
 
   Future<void> undoMarkAll(List<String> ids) async {

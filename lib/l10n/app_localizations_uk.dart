@@ -163,8 +163,8 @@ class AppLocalizationsUk extends AppLocalizations {
   }
 
   @override
-  String markedCount(int n) {
-    return 'Відмічено: $n';
+  String markedCount(int count) {
+    return 'Відмічено: $count';
   }
 
   @override
@@ -498,6 +498,31 @@ class AppLocalizationsUk extends AppLocalizations {
 
   @override
   String get couldntReadReceipt => 'Не вдалося прочитати чек';
+
+  @override
+  String get receiptTitle => 'Чек';
+
+  @override
+  String get receiptFound => 'Знайдено';
+
+  @override
+  String receiptSkipped(int count) {
+    return 'Пропущено: $count';
+  }
+
+  @override
+  String get selectAllNew => 'Вибрати все';
+
+  @override
+  String markCount(int count) {
+    return 'Відмітити $count';
+  }
+
+  @override
+  String get pricesMayBeMisread => 'Ціни могли бути прочитані неточно';
+
+  @override
+  String get newProduct => 'Новий продукт';
 
   @override
   String get models => 'Моделі';

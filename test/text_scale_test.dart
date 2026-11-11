@@ -1,6 +1,9 @@
 import 'package:buyonce/core/utils/result.dart';
 import 'package:buyonce/domain/models/amount.dart';
 import 'package:buyonce/domain/models/product.dart';
+import 'package:buyonce/domain/models/receipt_reading.dart';
+import 'package:buyonce/presentation/screens/receipt_review_screen.dart';
+import 'package:buyonce/presentation/view_models/receipt/receipt_review_view_model.dart';
 import 'package:buyonce/data/services/in_memory_group_service.dart';
 import 'package:buyonce/data/services/in_memory_list_service.dart';
 import 'package:buyonce/data/services/service_providers.dart';
@@ -255,6 +258,46 @@ void main() {
       await tester.pumpAndSettle();
       expectNoOverflow(tester, 'amount editor');
       await closeTop(tester);
+    });
+
+    testWidgets('the receipt review holds at ${scale.name}', (tester) async {
+      await pumpAt(tester, scale);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(MaterialApp)),
+      );
+      await container.read(listViewModelProvider.future);
+      container
+          .read(receiptReviewProvider.notifier)
+          .begin(
+            ReceiptReading(
+              store: 'A very long store name that goes on and on',
+              date: DateTime(2025, 11, 17),
+              lines: [
+                const ReceiptLine(
+                  raw: 'MLEKO UHT 3.2% 1L ŁACIATE VERY LONG PRINTED TEXT',
+                  kind: ReceiptLineKind.item,
+                  match: 'Milk',
+                  amount: Amount(count: 99, millilitres: 99900),
+                ),
+                ReceiptLine(
+                  raw: 'KOMIN',
+                  kind: ReceiptLineKind.item,
+                  name: 'N' * 100,
+                ),
+                const ReceiptLine(raw: 'SUMA', kind: ReceiptLineKind.total),
+              ],
+            ),
+          );
+      tester
+          .state<NavigatorState>(find.byType(Navigator).first)
+          .push(
+            MaterialPageRoute<void>(
+              builder: (_) => const ReceiptReviewScreen(),
+            ),
+          );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('foundCard')), findsOneWidget);
+      expectNoOverflow(tester, 'receipt review');
     });
 
     testWidgets('Ask and its notice hold at ${scale.name}', (tester) async {
