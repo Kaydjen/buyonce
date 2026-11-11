@@ -277,7 +277,8 @@ class _AmountButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(t.radiusButton),
       onTap: onTap,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
+        // 40 dp: the row's own padding is 2 x 8, so a Plan row stays 56 dp.
+        constraints: const BoxConstraints(minHeight: 40, minWidth: 48),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8),
           child: Center(
