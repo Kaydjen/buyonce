@@ -52,30 +52,52 @@ class ReceiptScanViewModel extends Notifier<ReceiptScanState> {
   @override
   ReceiptScanState build() => const ReceiptScanState();
 
-  /// Opens the camera and keeps the shot. False when no shot was added (the camera was
-  /// closed, failed, or the limit is reached).
-  Future<bool> addPhoto() async {
+  /// The camera screen opened: the connection to Google is opened meanwhile, so it is
+  /// ready when the first shot is.
+  void warmUp() =>
+      unawaited(ref.read(receiptParsingRepositoryProvider).warmUp());
+
+  /// Keeps a shot of the camera screen. False when the limit is reached or a photo is
+  /// being read.
+  bool addShot(Uint8List jpeg) {
     if (!state.canAddPhoto) return false;
-    // The camera takes seconds: the connection to Google is opened meanwhile.
-    unawaited(ref.read(receiptParsingRepositoryProvider).warmUp());
-    final taken = await ref
+    _photos.add(jpeg);
+    state = ReceiptScanState(photos: _photos.length);
+    return true;
+  }
+
+  /// Opens the gallery for as many photos as still fit and keeps what was chosen.
+  /// Returns how many were added.
+  Future<int> addFromGallery() async {
+    if (!state.canAddPhoto) return 0;
+    final room = ReceiptParsingRepository.maxPhotos - _photos.length;
+    final picked = await ref
         .read(photoServiceProvider)
-        .takePhoto(maxSide: photoSide, quality: photoQuality);
-    if (!ref.mounted) return false;
-    switch (taken) {
-      case Ok(:final value) when value != null:
-        _photos.add(value);
+        .pickFromGallery(
+          maxSide: photoSide,
+          quality: photoQuality,
+          limit: room,
+        );
+    if (!ref.mounted) return 0;
+    switch (picked) {
+      case Ok(:final value):
+        _photos.addAll(value.take(room));
         state = ReceiptScanState(photos: _photos.length);
-        return true;
-      case Ok():
-        return false; // the camera was closed
+        return value.take(room).length;
       case Failure():
         state = ReceiptScanState(
           photos: _photos.length,
           problem: const GeminiFailed(),
         );
-        return false;
+        return 0;
     }
+  }
+
+  /// The user took a shot back.
+  void removePhoto(int index) {
+    if (state.busy || index < 0 || index >= _photos.length) return;
+    _photos.removeAt(index);
+    state = ReceiptScanState(photos: _photos.length);
   }
 
   /// Reads the photos taken so far and opens the review. [language] is the English name

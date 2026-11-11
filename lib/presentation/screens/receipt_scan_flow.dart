@@ -1,38 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
-import '../../data/repositories/receipt_parsing_repository.dart';
 import '../../domain/models/gemini_outcome.dart';
 import '../../domain/models/gemini_task.dart';
 import '../../l10n/l10n.dart';
+import '../view_models/receipt/receipt_review_view_model.dart';
 import '../view_models/receipt/receipt_scan_view_model.dart';
 import '../view_models/settings/gemini_key_view_model.dart';
 import '../widgets/api_key_dialog.dart';
-import '../widgets/card_dialog.dart';
-import '../widgets/plain_button.dart';
 import '../widgets/toast.dart';
 import 'models_screen.dart';
+import 'receipt_camera_screen.dart';
+import 'receipt_review_screen.dart';
+import 'receipt_scan_format.dart';
 
-/// What the dialog after a shot decides.
-enum _Next { more, read }
-
-/// The English name of the app language, for names the model has to invent.
-String _language(BuildContext context) =>
-    Localizations.localeOf(context).languageCode == 'uk'
-    ? 'Ukrainian'
-    : 'English';
-
-/// A currency for a receipt that prints none: the phone's own region.
-String _fallbackCurrency(BuildContext context) =>
-    NumberFormat.simpleCurrency(
-      locale: Localizations.localeOf(context).toLanguageTag(),
-    ).currencyName ??
-    'USD';
-
-/// The whole "scan a receipt" gesture of the Shop top bar: key, camera, "one more photo
-/// or read", reading. Ends with the review ready in `receiptReviewProvider` (the screen
-/// that shows it is step 68.4) or with a problem the screen shows as a toast.
+/// The whole "scan a receipt" gesture of the Shop top bar: the key, then the camera
+/// screen (shots, gallery, reading), then the review. Photos live in memory and go
+/// when the review closes or the camera is left.
 Future<void> startReceiptScan(BuildContext context, WidgetRef ref) async {
   if (await ref.read(geminiKeyProvider.future) == null) {
     if (!context.mounted) return;
@@ -45,52 +29,34 @@ Future<void> startReceiptScan(BuildContext context, WidgetRef ref) async {
   final scan = ref.read(receiptScanProvider.notifier);
   if (ref.read(receiptScanProvider).busy) return;
   scan.reset();
-  await _shoot(context, ref);
-}
-
-/// Takes shots until the user chooses to read (or the limit is reached), then reads.
-Future<void> _shoot(BuildContext context, WidgetRef ref) async {
-  final scan = ref.read(receiptScanProvider.notifier);
-  while (true) {
-    await scan.addPhoto();
-    if (!context.mounted) return;
-    final taken = ref.read(receiptScanProvider);
-    // A closed camera before the first shot, or a broken one (its toast is shown).
-    if (taken.photos == 0) return;
-    if (taken.photos >= ReceiptParsingRepository.maxPhotos) break;
-    final next = await _askNext(context, taken.photos);
-    if (!context.mounted) return;
-    if (next == null) {
-      scan.reset();
-      return;
-    }
-    if (next == _Next.read) break;
-  }
-  await scan.read(
-    language: _language(context),
-    fallbackCurrency: _fallbackCurrency(context),
-  );
-}
-
-Future<_Next?> _askNext(BuildContext context, int photos) {
-  final l10n = context.l10n;
-  return showCardDialog<_Next>(
+  final reviewReady = await Navigator.of(
     context,
-    builder: (dialog) => CardDialog(
-      title: l10n.receiptPhotosTitle(photos),
-      cancel: PlainButton(
-        key: const Key('receiptMore'),
-        label: l10n.addPhoto,
-        onPressed: () => Navigator.of(dialog).pop(_Next.more),
-      ),
-      confirm: PlainButton(
-        key: const Key('receiptRead'),
-        label: l10n.readReceipt,
-        raised: true,
-        onPressed: () => Navigator.of(dialog).pop(_Next.read),
-      ),
-    ),
-  );
+  ).push<bool>(MaterialPageRoute(builder: (_) => const ReceiptCameraScreen()));
+  if (reviewReady != true) {
+    // The camera was left: nothing was read, nothing is kept.
+    scan.reset();
+    return;
+  }
+  if (!context.mounted) return;
+  await _openReview(context, ref);
+}
+
+/// The review of a scanned receipt; leaving it drops the review and the photos, "Check
+/// off N" has written the marks by then.
+Future<void> _openReview(BuildContext context, WidgetRef ref) async {
+  ref.read(receiptScanProvider.notifier).reviewShown();
+  final marked = await Navigator.of(
+    context,
+  ).push<int>(MaterialPageRoute(builder: (_) => const ReceiptReviewScreen()));
+  ref.read(receiptReviewProvider.notifier).discard();
+  ref.read(receiptScanProvider.notifier).reset();
+  if (marked != null && marked > 0 && context.mounted) {
+    showToast(
+      context,
+      context.l10n.markedCount(marked),
+      duration: const Duration(seconds: 2),
+    );
+  }
 }
 
 /// The toast for a reading that gave nothing; the photos are still there, so "Retry"
@@ -109,8 +75,8 @@ void showReceiptProblem(
       await startReceiptScan(context, ref);
     } else {
       await scan.read(
-        language: _language(context),
-        fallbackCurrency: _fallbackCurrency(context),
+        language: receiptLanguage(context),
+        fallbackCurrency: receiptFallbackCurrency(context),
       );
     }
   }

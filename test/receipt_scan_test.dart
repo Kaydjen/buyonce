@@ -36,15 +36,20 @@ class _FakeList extends ListViewModel {
 }
 
 Future<(ProviderContainer, ScriptedPhotoService, ScriptedGeminiApi)> _rig({
-  List<Uint8List?>? photos,
+  List<List<Uint8List>>? gallery,
   bool photoError = false,
   Object? Function(GeminiCall)? script,
   bool withKey = true,
 }) async {
   if (withKey) await GeminiKeyService().write('key-1');
   final camera = ScriptedPhotoService(
-    photos ?? [_jpeg, _jpeg, _jpeg, _jpeg],
+    const [],
     error: photoError,
+    gallery:
+        gallery ??
+        [
+          [_jpeg, _jpeg, _jpeg, _jpeg],
+        ],
   );
   final api = ScriptedGeminiApi(
     (c) => receiptReply(c, jsonEncode(script?.call(c) ?? _answer)),
@@ -67,15 +72,15 @@ Future<void> _read(ProviderContainer c) => c
 
 void main() {
   test('photos are counted, at most three; reading opens the review', () async {
-    final (c, camera, api) = await _rig();
+    final (c, _, api) = await _rig();
     final vm = c.read(receiptScanProvider.notifier);
     expect(c.read(receiptScanProvider).photos, 0);
-    expect(await vm.addPhoto(), isTrue);
-    expect(await vm.addPhoto(), isTrue);
-    expect(await vm.addPhoto(), isTrue);
+    expect(vm.addShot(_jpeg), isTrue);
+    expect(vm.addShot(_jpeg), isTrue);
+    expect(vm.addShot(_jpeg), isTrue);
     expect(c.read(receiptScanProvider).canAddPhoto, isFalse);
-    expect(await vm.addPhoto(), isFalse); // the limit: the camera is not opened
-    expect(camera.taken, 3);
+    expect(vm.addShot(_jpeg), isFalse); // the limit
+    expect(vm.photos.length, 3);
 
     await _read(c);
     final scan = c.read(receiptScanProvider);
@@ -92,24 +97,51 @@ void main() {
 
     vm.reviewShown();
     expect(c.read(receiptScanProvider).reviewReady, isFalse);
+    expect(vm.photos.length, 3);
+  });
+
+  test('the gallery fills the room that is left, never more', () async {
+    final (c, photos, _) = await _rig(
+      gallery: [
+        [_jpeg, _jpeg, _jpeg],
+        [_jpeg],
+      ],
+    );
+    final vm = c.read(receiptScanProvider.notifier);
+    vm.addShot(_jpeg);
+    expect(await vm.addFromGallery(), 2); // room for two of the three
+    expect(c.read(receiptScanProvider).photos, 3);
+    expect(await vm.addFromGallery(), 0); // full: the gallery is not opened
+    expect(photos.galleryOpened, 1);
   });
 
   test(
-    'a closed camera adds nothing, a broken one reports a problem',
+    'a closed gallery adds nothing, a broken one reports a problem',
     () async {
-      final (c, _, _) = await _rig(photos: [null]);
+      final (c, _, _) = await _rig(gallery: [const []]);
       final vm = c.read(receiptScanProvider.notifier);
-      expect(await vm.addPhoto(), isFalse);
-      expect(c.read(receiptScanProvider).photos, 0);
+      expect(await vm.addFromGallery(), 0);
       expect(c.read(receiptScanProvider).problem, isNull);
 
       final (c2, _, _) = await _rig(photoError: true);
-      expect(await c2.read(receiptScanProvider.notifier).addPhoto(), isFalse);
+      expect(await c2.read(receiptScanProvider.notifier).addFromGallery(), 0);
       expect(c2.read(receiptScanProvider).problem, isA<GeminiFailed>());
       c2.read(receiptScanProvider.notifier).problemShown();
       expect(c2.read(receiptScanProvider).problem, isNull);
     },
   );
+
+  test('a shot can be taken back', () async {
+    final (c, _, _) = await _rig();
+    final vm = c.read(receiptScanProvider.notifier);
+    vm.addShot(_jpeg);
+    vm.addShot(Uint8List.fromList([9]));
+    vm.removePhoto(0);
+    expect(vm.photos.single, [9]);
+    expect(c.read(receiptScanProvider).photos, 1);
+    vm.removePhoto(5); // out of range: nothing happens
+    expect(c.read(receiptScanProvider).photos, 1);
+  });
 
   test('reading without photos does nothing', () async {
     final (c, _, api) = await _rig();
@@ -121,7 +153,7 @@ void main() {
   test('a problem keeps the photos for a retry and opens no review', () async {
     final (c, _, _) = await _rig(withKey: false);
     final vm = c.read(receiptScanProvider.notifier);
-    await vm.addPhoto();
+    vm.addShot(_jpeg);
     await _read(c);
     var scan = c.read(receiptScanProvider);
     expect(scan.problem, isA<GeminiNoKey>());
@@ -139,7 +171,7 @@ void main() {
   test('reset drops the photos', () async {
     final (c, _, _) = await _rig();
     final vm = c.read(receiptScanProvider.notifier);
-    await vm.addPhoto();
+    vm.addShot(_jpeg);
     expect(c.read(receiptScanProvider).photos, 1);
     vm.reset();
     expect(c.read(receiptScanProvider).photos, 0);

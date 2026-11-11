@@ -338,7 +338,10 @@ class _RowTile extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        row.name,
+                        // A guess is a question until the user ticks it.
+                        row.doubtful && !row.checked
+                            ? '${row.name}?'
+                            : row.name,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: theme.bodyLarge,

@@ -495,6 +495,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readReceipt => 'Read';
 
   @override
+  String get cameraDenied => 'No access to the camera';
+
+  @override
+  String get cameraUnavailable => 'The camera is not available';
+
+  @override
+  String get cameraLamp => 'Lamp';
+
+  @override
+  String get cameraShoot => 'Take photo';
+
+  @override
+  String get cameraGallery => 'Gallery';
+
+  @override
+  String get closeCamera => 'Close';
+
+  @override
   String get couldntReadReceipt => 'Couldn\'t read this receipt';
 
   @override
@@ -506,7 +524,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get receiptCheckTitle => 'Check these';
+  String get receiptCheckTitle => 'Check the name';
 
   @override
   String get receiptInTitle => 'On the receipt';

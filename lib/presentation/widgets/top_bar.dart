@@ -21,7 +21,6 @@ class TopBar extends StatelessWidget {
     required this.onAdd,
     required this.menu,
     this.onScan,
-    this.scanBusy = false,
     this.statusKey,
     this.hideStatus = false,
     this.offline = false,
@@ -41,9 +40,6 @@ class TopBar extends StatelessWidget {
 
   /// Scans a receipt; in Shop only, in the place Plan gives to "add".
   final VoidCallback? onScan;
-
-  /// A receipt is being read: the scan icon is a small spinner meanwhile.
-  final bool scanBusy;
 
   /// Lets the list measure the status.
   final Key? statusKey;
@@ -124,22 +120,9 @@ class TopBar extends StatelessWidget {
     );
   }
 
-  /// The receipt icon of Shop; a spinner while a receipt is being read.
+  /// The receipt icon of Shop.
   Widget _scan(BuildContext context, bool raised) {
     final label = context.l10n.scanReceiptTooltip;
-    if (scanBusy) {
-      return SizedBox(
-        key: const Key('scanBusy'),
-        width: raised ? 52 : 48,
-        child: const Center(
-          child: SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        ),
-      );
-    }
     return raised
         ? RaisedIcon(
             key: const Key('scanReceipt'),

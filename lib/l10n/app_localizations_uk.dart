@@ -497,6 +497,24 @@ class AppLocalizationsUk extends AppLocalizations {
   String get readReceipt => 'Прочитати';
 
   @override
+  String get cameraDenied => 'Немає доступу до камери';
+
+  @override
+  String get cameraUnavailable => 'Камера недоступна';
+
+  @override
+  String get cameraLamp => 'Ліхтарик';
+
+  @override
+  String get cameraShoot => 'Зробити фото';
+
+  @override
+  String get cameraGallery => 'Галерея';
+
+  @override
+  String get closeCamera => 'Закрити';
+
+  @override
   String get couldntReadReceipt => 'Не вдалося прочитати чек';
 
   @override
@@ -508,7 +526,7 @@ class AppLocalizationsUk extends AppLocalizations {
   }
 
   @override
-  String get receiptCheckTitle => 'Перевірте';
+  String get receiptCheckTitle => 'Перевірте назву';
 
   @override
   String get receiptInTitle => 'У чеку';

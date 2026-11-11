@@ -5,6 +5,7 @@ import 'package:buyonce/core/utils/result.dart';
 import 'package:buyonce/data/services/gemini_api.dart';
 import 'package:buyonce/data/services/gemini_key_service.dart';
 import 'package:buyonce/data/services/photo_service.dart';
+import 'package:buyonce/data/services/receipt_camera.dart';
 import 'package:buyonce/data/services/scripted_gemini_api.dart';
 import 'package:buyonce/data/repositories/receipt_alias_repository.dart';
 import 'package:buyonce/domain/models/receipt_matching.dart';
@@ -41,24 +42,41 @@ final _answer = jsonEncode({
   ],
 });
 
-/// Opens the app on Shop (its start screen) with a scripted camera and Gemini.
-Future<(ProviderContainer, ScriptedPhotoService, ScriptedGeminiApi)> openShop(
+/// What a test of the receipt flow holds on to.
+class Rig {
+  Rig(this.container, this.camera, this.gallery, this.api);
+  final ProviderContainer container;
+  final ScriptedReceiptCamera camera;
+  final ScriptedPhotoService gallery;
+  final ScriptedGeminiApi api;
+}
+
+/// Opens the app on Shop (its start screen) with a scripted camera, gallery and Gemini.
+Future<Rig> openShop(
   WidgetTester tester, {
   Result<GeminiReply> Function(GeminiCall call)? script,
-  List<Uint8List?>? photos,
-  bool photoError = false,
+  List<Uint8List>? shots,
+  List<List<Uint8List>> pickable = const [],
+  CameraError? cameraError,
+  bool galleryError = false,
   bool withKey = true,
 }) async {
   if (withKey) await GeminiKeyService().write('key-1');
-  final camera = ScriptedPhotoService(
-    photos ?? [_jpeg, _jpeg, _jpeg, _jpeg],
-    error: photoError,
+  final camera = ScriptedReceiptCamera(
+    shots ?? [_jpeg, _jpeg, _jpeg, _jpeg],
+    error: cameraError,
+  );
+  final gallery = ScriptedPhotoService(
+    const [],
+    gallery: pickable,
+    error: galleryError,
   );
   final api = ScriptedGeminiApi(script ?? (c) => receiptReply(c, _answer));
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        photoServiceProvider.overrideWithValue(camera),
+        receiptCameraProvider.overrideWithValue(camera),
+        photoServiceProvider.overrideWithValue(gallery),
         geminiApiProvider.overrideWithValue(api),
       ],
       child: const BuyOnceApp(),
@@ -68,11 +86,21 @@ Future<(ProviderContainer, ScriptedPhotoService, ScriptedGeminiApi)> openShop(
   final container = ProviderScope.containerOf(
     tester.element(find.byType(MaterialApp)),
   );
-  return (container, camera, api);
+  return Rig(container, camera, gallery, api);
 }
 
 Future<void> tapScan(WidgetTester tester) async {
   await tester.tap(find.byKey(const Key('scanReceipt')));
+  await tester.pumpAndSettle();
+}
+
+Future<void> shoot(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('cameraShutter')));
+  await tester.pumpAndSettle();
+}
+
+Future<void> readNow(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('cameraRead')));
   await tester.pumpAndSettle();
 }
 
@@ -90,82 +118,174 @@ void main() {
     expect(find.byKey(const Key('scanReceipt')), findsOneWidget);
   });
 
-  testWidgets('one photo: Read sends it and the review is ready', (
-    tester,
-  ) async {
-    final (c, camera, api) = await openShop(tester);
+  testWidgets(
+    'the camera screen: preview, shutter, lamp, gallery at the bottom right',
+    (tester) async {
+      final rig = await openShop(tester);
+      await tapScan(tester);
+      expect(rig.camera.opened, 1);
+      expect(
+        rig.api.warmUps,
+        1,
+      ); // the connection is opened while the user aims
+      expect(find.byKey(const Key('fakePreview')), findsOneWidget);
+      expect(find.byKey(const Key('cameraShutter')), findsOneWidget);
+      expect(find.byKey(const Key('cameraTorch')), findsOneWidget);
+      // Nothing to read yet.
+      expect(find.byKey(const Key('cameraRead')), findsNothing);
+      // The gallery button is at the bottom right, the shutter in the middle.
+      final size = tester.view.physicalSize / tester.view.devicePixelRatio;
+      final gallery = tester.getCenter(find.byKey(const Key('cameraGallery')));
+      final shutter = tester.getCenter(find.byKey(const Key('cameraShutter')));
+      expect(gallery.dx, greaterThan(size.width * 0.75));
+      expect(gallery.dy, greaterThan(size.height * 0.7));
+      expect((shutter.dx - size.width / 2).abs(), lessThan(8));
+      // The lamp.
+      await tester.tap(find.byKey(const Key('cameraTorch')));
+      await tester.pumpAndSettle();
+      expect(rig.camera.torch, isTrue);
+    },
+  );
+
+  testWidgets('one shot: Read sends it and the review opens', (tester) async {
+    final rig = await openShop(tester);
     await tapScan(tester);
-    expect(camera.taken, 1);
-    expect(api.warmUps, 1);
-    expect(find.byType(CardDialog), findsOneWidget);
-    expect(find.text('Photos: 1'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('receiptRead')));
-    await tester.pumpAndSettle();
+    await shoot(tester);
+    expect(rig.camera.taken, 1);
+    expect(find.byKey(const ValueKey('thumb-0')), findsOneWidget);
+    await readNow(tester);
     final parts =
-        ((api.calls.first.body['contents'] as List).single as Map)['parts']
+        ((rig.api.calls.first.body['contents'] as List).single as Map)['parts']
             as List;
     expect(parts.length, 2); // prompt + one photo
     expect((parts[0] as Map)['text'], contains('Milk'));
-    expect(c.read(receiptReviewProvider), isNotNull);
-    final review = c.read(receiptReviewProvider)!;
+    // The camera is gone, the review is on screen.
+    expect(find.byKey(const Key('cameraShutter')), findsNothing);
+    expect(find.byKey(const Key('boughtHeader')), findsOneWidget);
+    expect(rig.camera.closed, isTrue);
+    final review = rig.container.read(receiptReviewProvider)!;
     expect(review.store, 'Auchan');
     expect(review.fresh.single.name, 'Komin');
   });
 
-  testWidgets('Add photo opens the camera again; three photos read at once', (
+  testWidgets('three shots read by themselves; a shot can be taken back', (
     tester,
   ) async {
-    final (c, camera, api) = await openShop(tester);
+    final rig = await openShop(tester);
     await tapScan(tester);
-    await tester.tap(find.byKey(const Key('receiptMore')));
+    await shoot(tester);
+    await shoot(tester);
+    expect(find.byKey(const ValueKey('thumb-1')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('thumb-0')));
     await tester.pumpAndSettle();
-    expect(camera.taken, 2);
-    expect(find.text('Photos: 2'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('receiptMore')));
-    await tester.pumpAndSettle();
-    // The third shot is the last: no question, the reading starts.
-    expect(camera.taken, 3);
-    expect(find.byType(CardDialog), findsNothing);
+    expect(find.byKey(const ValueKey('thumb-1')), findsNothing);
+    await shoot(tester);
+    await shoot(tester);
+    // Three photos are the most: the reading started without a question.
+    expect(rig.camera.taken, 4);
     final parts =
-        ((api.calls.first.body['contents'] as List).single as Map)['parts']
+        ((rig.api.calls.first.body['contents'] as List).single as Map)['parts']
             as List;
     expect(parts.length, 4);
-    expect(c.read(receiptReviewProvider), isNotNull);
+    expect(find.byKey(const Key('boughtHeader')), findsOneWidget);
   });
 
-  testWidgets('closing the dialog throws the photo away', (tester) async {
-    final (c, _, api) = await openShop(tester);
+  testWidgets('the gallery: chosen photos join the shots, "Read" sends them', (
+    tester,
+  ) async {
+    final rig = await openShop(
+      tester,
+      pickable: [
+        [_jpeg, _jpeg],
+      ],
+    );
     await tapScan(tester);
-    await tester.tapAt(const Offset(5, 5)); // the veil
+    await shoot(tester);
+    await tester.tap(find.byKey(const Key('cameraGallery')));
     await tester.pumpAndSettle();
-    expect(find.byType(CardDialog), findsNothing);
-    expect(api.calls, isEmpty);
-    expect(c.read(receiptScanProvider).photos, 0);
+    expect(rig.gallery.galleryOpened, 1);
+    // One shot and two photos fill the three places: the reading started.
+    final parts =
+        ((rig.api.calls.first.body['contents'] as List).single as Map)['parts']
+            as List;
+    expect(parts.length, 4);
+    expect(find.byKey(const Key('boughtHeader')), findsOneWidget);
   });
 
-  testWidgets('a closed camera does nothing', (tester) async {
-    final (_, camera, api) = await openShop(tester, photos: [null]);
+  testWidgets('a gallery pick that is not full waits for Read', (tester) async {
+    final rig = await openShop(
+      tester,
+      pickable: [
+        [_jpeg],
+      ],
+    );
     await tapScan(tester);
-    expect(camera.taken, 1);
-    expect(find.byType(CardDialog), findsNothing);
-    expect(api.calls, isEmpty);
+    await tester.tap(find.byKey(const Key('cameraGallery')));
+    await tester.pumpAndSettle();
+    expect(rig.api.calls, isEmpty);
+    expect(find.byKey(const ValueKey('thumb-0')), findsOneWidget);
+    await readNow(tester);
+    expect(find.byKey(const Key('boughtHeader')), findsOneWidget);
+  });
+
+  testWidgets('closing the camera throws the shots away', (tester) async {
+    final rig = await openShop(tester);
+    await tapScan(tester);
+    await shoot(tester);
+    await tester.tap(find.byKey(const Key('cameraClose')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('cameraShutter')), findsNothing);
+    expect(rig.api.calls, isEmpty);
+    expect(rig.container.read(receiptScanProvider).photos, 0);
+    expect(rig.container.read(receiptScanProvider.notifier).photos, isEmpty);
   });
 
   testWidgets('no key: the key dialog first, no camera', (tester) async {
-    final (_, camera, _) = await openShop(tester, withKey: false);
+    final rig = await openShop(tester, withKey: false);
     await tapScan(tester);
     expect(find.byType(CardDialog), findsOneWidget);
-    expect(camera.taken, 0);
+    expect(rig.camera.opened, 0);
     await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
     await tester.pumpAndSettle();
-    expect(camera.taken, 0);
+    expect(rig.camera.opened, 0);
   });
 
-  testWidgets('a failure: a message with Retry that reads the same photo', (
+  testWidgets('no access to the camera: told so, the gallery still works', (
+    tester,
+  ) async {
+    final rig = await openShop(
+      tester,
+      cameraError: CameraError.denied,
+      pickable: [
+        [_jpeg],
+      ],
+    );
+    await tapScan(tester);
+    expect(find.text('No access to the camera'), findsOneWidget);
+    expect(find.byKey(const Key('fakePreview')), findsNothing);
+    // The shutter is off, the lamp is not offered, the gallery is.
+    expect(find.byKey(const Key('cameraTorch')), findsNothing);
+    await tester.tap(find.byKey(const Key('cameraShutter')));
+    await tester.pumpAndSettle();
+    expect(rig.camera.taken, 0);
+    await tester.tap(find.byKey(const Key('cameraGallery')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('thumb-0')), findsOneWidget);
+  });
+
+  testWidgets('a camera that is not there is told the same way', (
+    tester,
+  ) async {
+    await openShop(tester, cameraError: CameraError.unavailable);
+    await tapScan(tester);
+    expect(find.text('The camera is not available'), findsOneWidget);
+  });
+
+  testWidgets('a failure: a message with Retry that reads the same photos', (
     tester,
   ) async {
     var n = 0;
-    final (c, camera, api) = await openShop(
+    final rig = await openShop(
       tester,
       script: (c) {
         if (isMatcherCall(c)) return receiptReply(c, _answer);
@@ -175,22 +295,27 @@ void main() {
       },
     );
     await tapScan(tester);
-    await tester.tap(find.byKey(const Key('receiptRead')));
-    await tester.pumpAndSettle();
+    await shoot(tester);
+    await readNow(tester);
     expect(find.text("Couldn't read this receipt"), findsOneWidget);
-    expect(c.read(receiptReviewProvider), isNull);
+    expect(
+      find.byKey(const Key('cameraShutter')),
+      findsOneWidget,
+    ); // still here
+    expect(rig.container.read(receiptReviewProvider), isNull);
     await tester.tap(find.text('Retry'));
     await tester.pumpAndSettle();
-    expect(camera.taken, 1); // no new shot
-    expect(api.calls.length, greaterThanOrEqualTo(2));
-    expect(c.read(receiptReviewProvider), isNotNull);
+    expect(rig.camera.taken, 1); // no new shot
+    expect(rig.api.calls.length, greaterThanOrEqualTo(2));
+    expect(find.byKey(const Key('boughtHeader')), findsOneWidget);
   });
 
-  testWidgets('a broken camera is told the same way', (tester) async {
-    await openShop(tester, photoError: true);
+  testWidgets('a broken gallery is told the same way', (tester) async {
+    await openShop(tester, galleryError: true);
     await tapScan(tester);
+    await tester.tap(find.byKey(const Key('cameraGallery')));
+    await tester.pumpAndSettle();
     expect(find.text("Couldn't read this receipt"), findsOneWidget);
-    expect(find.byType(CardDialog), findsNothing);
   });
 
   group('review screen', () {
@@ -206,15 +331,15 @@ void main() {
       String? answer,
       String? matcher,
     }) async {
-      final (c, _, _) = await openShop(
+      final rig = await openShop(
         tester,
         script: (call) =>
             receiptReply(call, answer ?? _answer, matcher: matcher),
       );
       await tapScan(tester);
-      await tester.tap(find.byKey(const Key('receiptRead')));
-      await tester.pumpAndSettle();
-      return c;
+      await shoot(tester);
+      await readNow(tester);
+      return rig.container;
     }
 
     testWidgets('opens after reading: the list against the receipt', (
@@ -304,6 +429,9 @@ void main() {
         final c = await openReview(tester, matcher: disagree);
         expect(find.byKey(const Key('checkCard')), findsOneWidget);
         expect(find.byKey(const Key('inCard')), findsNothing);
+        // The card says what to do, the row is a question until it is ticked.
+        expect(find.text('Check the name'), findsOneWidget);
+        expect(find.text('Milk?'), findsOneWidget);
         expect(find.byKey(const Key('printed-r0')), findsOneWidget);
         expect(find.text('mleko = milk'), findsOneWidget);
         // Nothing is ticked, so the button is on screen but off.
@@ -319,6 +447,8 @@ void main() {
         await tester.tap(find.byKey(const Key('check-r0')));
         await tester.pumpAndSettle();
         expect(find.text('Check off 1'), findsOneWidget);
+        expect(find.text('Milk?'), findsNothing);
+        expect(find.text('Milk'), findsWidgets);
         expect(find.text('Bought 1 of 4'), findsOneWidget);
         expect(c.read(receiptReviewProvider)!.chosen.single.name, 'Milk');
       },

@@ -938,6 +938,42 @@ abstract class AppLocalizations {
   /// **'Read'**
   String get readReceipt;
 
+  /// No description provided for @cameraDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'No access to the camera'**
+  String get cameraDenied;
+
+  /// No description provided for @cameraUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'The camera is not available'**
+  String get cameraUnavailable;
+
+  /// No description provided for @cameraLamp.
+  ///
+  /// In en, this message translates to:
+  /// **'Lamp'**
+  String get cameraLamp;
+
+  /// No description provided for @cameraShoot.
+  ///
+  /// In en, this message translates to:
+  /// **'Take photo'**
+  String get cameraShoot;
+
+  /// No description provided for @cameraGallery.
+  ///
+  /// In en, this message translates to:
+  /// **'Gallery'**
+  String get cameraGallery;
+
+  /// No description provided for @closeCamera.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get closeCamera;
+
   /// No description provided for @couldntReadReceipt.
   ///
   /// In en, this message translates to:
@@ -959,7 +995,7 @@ abstract class AppLocalizations {
   /// No description provided for @receiptCheckTitle.
   ///
   /// In en, this message translates to:
-  /// **'Check these'**
+  /// **'Check the name'**
   String get receiptCheckTitle;
 
   /// No description provided for @receiptInTitle.

@@ -1,8 +1,12 @@
+import 'dart:typed_data';
+
 import 'package:buyonce/core/utils/result.dart';
 import 'package:buyonce/domain/models/amount.dart';
 import 'package:buyonce/domain/models/product.dart';
 import 'package:buyonce/domain/models/receipt_reading.dart';
+import 'package:buyonce/presentation/screens/receipt_camera_screen.dart';
 import 'package:buyonce/presentation/screens/receipt_review_screen.dart';
+import 'package:buyonce/presentation/view_models/receipt/receipt_scan_view_model.dart';
 import 'package:buyonce/presentation/view_models/receipt/receipt_review_view_model.dart';
 import 'package:buyonce/data/services/in_memory_group_service.dart';
 import 'package:buyonce/data/services/in_memory_list_service.dart';
@@ -311,6 +315,29 @@ void main() {
       await tester.tap(find.byKey(const Key('moreLines')));
       await tester.pumpAndSettle();
       expectNoOverflow(tester, 'receipt review with the spare lines');
+    });
+
+    testWidgets('the receipt camera holds at ${scale.name}', (tester) async {
+      await pumpAt(tester, scale);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(MaterialApp)),
+      );
+      final scan = container.read(receiptScanProvider.notifier);
+      for (var i = 0; i < 2; i++) {
+        scan.addShot(Uint8List.fromList([i]));
+      }
+      tester
+          .state<NavigatorState>(find.byType(Navigator).first)
+          .push(
+            MaterialPageRoute<void>(
+              builder: (_) => const ReceiptCameraScreen(),
+            ),
+          );
+      await tester.pumpAndSettle();
+      // The plugin is not there in a test: the screen says so and still works.
+      expect(find.byKey(const Key('cameraGallery')), findsOneWidget);
+      expect(find.byKey(const Key('cameraRead')), findsOneWidget);
+      expectNoOverflow(tester, 'receipt camera');
     });
 
     testWidgets('Ask and its notice hold at ${scale.name}', (tester) async {
