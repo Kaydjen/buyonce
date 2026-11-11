@@ -358,5 +358,7 @@
   "unitKg": "kg",
   "unitG": "g",
   "unitL": "l",
-  "unitMl": "ml"
+  "unitMl": "ml",
+  "unitWeight": "kg/g",
+  "unitVolume": "l/ml"
 }

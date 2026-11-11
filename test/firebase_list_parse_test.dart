@@ -130,7 +130,11 @@ void main() {
       Amount.none,
     );
     final change = productChange(p, wasPlanned: true, me: 'bob');
-    expect(change['need'], {'count': 2, 'ml': 1500});
+    // Field by field; what is not set is deleted, so no old measure can stay.
+    expect(change['need.count'], 2);
+    expect(change['need.ml'], 1500);
+    expect(change['need.g'], isA<FieldValue>());
+    expect(change.containsKey('need'), isFalse);
     // Unchanged: not written. Cleared: deleted.
     expect(
       productChange(p, wasPlanned: true, wasNeed: p.need, me: 'bob').keys,

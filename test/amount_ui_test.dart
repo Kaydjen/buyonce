@@ -66,15 +66,17 @@ void main() {
       await pumpApp(tester);
       await openEditor(tester, 'Bread');
       await times(tester, 'countMore', 1);
-      await times(tester, 'sizeMore', 15);
-      expect(textOf(tester, 'amountSize'), '1.5');
+      // 20 steps of 50 reach 1000, one more of 100 gives 1.1.
+      await times(tester, 'sizeMore', 21);
+      expect(textOf(tester, 'amountSize'), '1.1 kg');
       await tester.tap(find.byKey(const Key('unitL')));
       await tester.pump();
+      expect(textOf(tester, 'amountSize'), '1.1 l');
       await closeEditor(tester);
       expect(
         find.descendant(
           of: rowAmount('Bread'),
-          matching: find.text('x2 1.5 l'),
+          matching: find.text('2 × 1.1 l'),
         ),
         findsOneWidget,
       );
@@ -82,16 +84,69 @@ void main() {
       await tester.tap(rowAmount('Bread'));
       await tester.pumpAndSettle();
       expect(textOf(tester, 'amountCount'), 'x2');
-      expect(textOf(tester, 'amountSize'), '1.5');
+      expect(textOf(tester, 'amountSize'), '1.1 l');
       await times(tester, 'countLess', 3);
       expect(textOf(tester, 'amountCount'), 'x1');
       await closeEditor(tester);
+      // Count 1: no sign at all, only the size.
       expect(
-        find.descendant(of: rowAmount('Bread'), matching: find.text('1.5 l')),
+        find.descendant(of: rowAmount('Bread'), matching: find.text('1.1 l')),
         findsOneWidget,
       );
     },
   );
+
+  testWidgets(
+    'small sizes: 50 steps up to 1 kg, 150 g and 450 ml are reachable',
+    (tester) async {
+      await pumpApp(tester);
+      await openEditor(tester, 'Bread');
+      await times(tester, 'sizeMore', 3);
+      expect(textOf(tester, 'amountSize'), '150 g');
+      await times(tester, 'sizeMore', 17);
+      expect(textOf(tester, 'amountSize'), '1 kg');
+      await times(tester, 'sizeLess', 1);
+      expect(textOf(tester, 'amountSize'), '950 g');
+      await tester.tap(find.byKey(const Key('unitL')));
+      await tester.pump();
+      await times(tester, 'sizeLess', 10);
+      expect(textOf(tester, 'amountSize'), '450 ml');
+      await closeEditor(tester);
+      expect(
+        find.descendant(of: rowAmount('Bread'), matching: find.text('450 ml')),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('a tap on a number types it', (tester) async {
+    await pumpApp(tester);
+    await openEditor(tester, 'Bread');
+    await tester.tap(find.byKey(const Key('amountSize')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('sizeField')), '175');
+    await tester.tap(find.byKey(const Key('amountCount')));
+    await tester.pumpAndSettle();
+    // Typing the size ended when the count was tapped; the size shows as typed.
+    await tester.enterText(find.byKey(const Key('countField')), '3');
+    await closeEditor(tester);
+    expect(
+      find.descendant(of: rowAmount('Bread'), matching: find.text('3 × 175 g')),
+      findsOneWidget,
+    );
+
+    // An empty size field clears the size.
+    await tester.tap(rowAmount('Bread'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('amountSize')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('sizeField')), '');
+    await closeEditor(tester);
+    expect(
+      find.descendant(of: rowAmount('Bread'), matching: find.text('x3')),
+      findsOneWidget,
+    );
+  });
 
   testWidgets('minus down to the default clears the amount', (tester) async {
     await pumpApp(tester);

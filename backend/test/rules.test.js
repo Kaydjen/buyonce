@@ -474,6 +474,19 @@ describe('products', () => {
       }));
     });
 
+    it('field by field: a switch from litres to kilos, and the empty need', async () => {
+      const db = as('bob');
+      await assertSucceeds(updateDoc(doc(db, 'groups/g1/products/milk'), { ...plan, need: { ml: 250 } }));
+      await assertSucceeds(updateDoc(doc(db, 'groups/g1/products/milk'), {
+        'need.g': 250, 'need.ml': deleteField(), 'need.count': deleteField(),
+      }));
+      await assertSucceeds(updateDoc(doc(db, 'groups/g1/products/milk'), {
+        'need.count': 2, 'need.g': deleteField(),
+      }));
+      await assertFails(updateDoc(doc(db, 'groups/g1/products/milk'), { 'need.count': 100 }));
+      await assertFails(updateDoc(doc(db, 'groups/g1/products/milk'), { 'need.price': 5 }));
+    });
+
     it('is refused on a product that is not planned', async () => {
       const db = as('bob');
       await assertFails(updateDoc(doc(db, 'groups/g1/products/milk'), { need: { count: 2 } }));

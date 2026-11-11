@@ -541,4 +541,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get unitMl => 'ml';
+
+  @override
+  String get unitWeight => 'kg/g';
+
+  @override
+  String get unitVolume => 'l/ml';
 }

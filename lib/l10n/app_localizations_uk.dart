@@ -543,4 +543,10 @@ class AppLocalizationsUk extends AppLocalizations {
 
   @override
   String get unitMl => 'мл';
+
+  @override
+  String get unitWeight => 'кг/г';
+
+  @override
+  String get unitVolume => 'л/мл';
 }

@@ -1033,6 +1033,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'ml'**
   String get unitMl;
+
+  /// No description provided for @unitWeight.
+  ///
+  /// In en, this message translates to:
+  /// **'kg/g'**
+  String get unitWeight;
+
+  /// No description provided for @unitVolume.
+  ///
+  /// In en, this message translates to:
+  /// **'l/ml'**
+  String get unitVolume;
 }
 
 class _AppLocalizationsDelegate

@@ -12,32 +12,27 @@ String plainNumber(BuildContext context, num value) {
   return format.format(value);
 }
 
-/// The measure of one unit: "500 g", "1.5 kg", "250 ml", "1.5 l"; empty when none is set.
-/// Whole kilos and litres are written from 1000 up.
-String measureText(BuildContext context, Amount a) {
+/// A size in g or ml as people say it: "150 g", "450 ml", "1.5 kg", "1 l". Whole kilos
+/// and litres are written from 1000 up.
+String sizeText(BuildContext context, int value, {required bool litres}) {
   final l10n = context.l10n;
-  final parts = <String>[];
-  final g = a.grams;
-  if (g != null) {
-    parts.add(
-      g < 1000
-          ? '${plainNumber(context, g)} ${l10n.unitG}'
-          : '${plainNumber(context, g / 1000)} ${l10n.unitKg}',
-    );
+  if (value < 1000) {
+    return '${plainNumber(context, value)} ${litres ? l10n.unitMl : l10n.unitG}';
   }
-  final ml = a.millilitres;
-  if (ml != null) {
-    parts.add(
-      ml < 1000
-          ? '${plainNumber(context, ml)} ${l10n.unitMl}'
-          : '${plainNumber(context, ml / 1000)} ${l10n.unitL}',
-    );
-  }
-  return parts.join(' ');
+  return '${plainNumber(context, value / 1000)} ${litres ? l10n.unitL : l10n.unitKg}';
 }
 
-/// What a row shows: "x2", "1.5 kg" or "x2 1.5 l"; empty for [Amount.none].
-String amountText(BuildContext context, Amount a) => [
-  if (a.count > 1) context.l10n.amountCount(a.count),
-  measureText(context, a),
-].where((s) => s.isNotEmpty).join(' ');
+/// The measure of one unit: "500 g", "1.5 kg", "250 ml", "1.5 l"; empty when none is set.
+String measureText(BuildContext context, Amount a) => [
+  if (a.grams case final g?) sizeText(context, g, litres: false),
+  if (a.millilitres case final ml?) sizeText(context, ml, litres: true),
+].join(' ');
+
+/// What a row shows: "x2" (count alone), "1.5 kg" (size alone, count 1) or "2 × 1.5 kg";
+/// empty for [Amount.none]. A part that is not set leaves no trace, not even its sign.
+String amountText(BuildContext context, Amount a) {
+  final measure = measureText(context, a);
+  if (a.count > 1 && measure.isNotEmpty) return '${a.count} × $measure';
+  if (a.count > 1) return context.l10n.amountCount(a.count);
+  return measure;
+}

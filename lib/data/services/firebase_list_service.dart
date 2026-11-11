@@ -95,6 +95,17 @@ Notice noticeFromData(String groupId, String id, Doc data) => Notice(
   seen: data['seen'] == true,
 );
 
+/// The write of a changed need, field by field (`need.g`, `need.ml`, `need.count`):
+/// what is not set is deleted explicitly, so a switch from litres to kilos can never
+/// leave the old measure beside the new one, however the local copy merges the map.
+Map<String, Object?> needChange(Amount need) => need.isNone
+    ? {'need': FieldValue.delete()}
+    : {
+        'need.count': need.count == 1 ? FieldValue.delete() : need.count,
+        'need.g': need.grams ?? FieldValue.delete(),
+        'need.ml': need.millilitres ?? FieldValue.delete(),
+      };
+
 /// What an update of a product writes (never `usage`). Planning stamps the planner and
 /// the server time, un-planning removes both; a product that stays planned keeps them,
 /// because the rules refuse a change of either.
@@ -126,8 +137,7 @@ Map<String, Object?> productChange(
   },
   // The need lives only while the product is planned (the rules check it too); it is
   // written only when it changes.
-  if (p.need != wasNeed)
-    'need': p.need.isNone ? FieldValue.delete() : amountToData(p.need),
+  if (p.need != wasNeed) ...needChange(p.need),
 };
 
 /// Products, trips, plans and notices of the groups on Firestore, for the real
